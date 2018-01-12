@@ -80,6 +80,8 @@ class TXTBase(dns.rdata.Rdata):
         relativize_to: Optional[dns.name.Name] = None,
     ) -> dns.rdata.Rdata:
         strings = []
+        max_str_len = 255
+
         for token in tok.get_remaining():
             token = token.unescape_to_bytes()
             # The 'if' below is always true in the current code, but we
@@ -89,8 +91,11 @@ class TXTBase(dns.rdata.Rdata):
             ):  # pragma: no cover
                 raise dns.exception.SyntaxError("expected a string")
             if len(token.value) > 255:
-                raise dns.exception.SyntaxError("string too long")
-            strings.append(token.value)
+                # Cut into smaller strings:
+                strings += [value[i:i+max_str_len] for i in range(
+                            0, len(value), max_str_len)]
+            else:
+                strings.append(token.value)
         if len(strings) == 0:
             raise dns.exception.UnexpectedEnd
         return cls(rdclass, rdtype, strings)
