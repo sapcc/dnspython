@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2017 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -16,7 +18,6 @@
 # $Id: Makefile,v 1.16 2004/03/19 00:17:27 halley Exp $
 
 PYTHON=python
-PYTHON3=python3
 
 all:
 	${PYTHON} ./setup.py build
@@ -34,12 +35,13 @@ distclean: clean docclean
 	rm -rf build dist
 	rm -f MANIFEST
 
-doc:
+doco:
 	epydoc -v -n dnspython -u http://www.dnspython.org \
 		dns/*.py dns/rdtypes/*.py dns/rdtypes/ANY/*.py \
+		dns/rdtypes/CH/*.py \
 		dns/rdtypes/IN/*.py
 
-dockits: doc
+dockits: doco
 	mv html dnspython-html
 	tar czf html.tar.gz dnspython-html
 	zip -r html.zip dnspython-html
@@ -49,7 +51,7 @@ docclean:
 	rm -rf html.tar.gz html.zip html
 
 kits:
-	${PYTHON3} ./setup.py sdist --formats=gztar,zip bdist_wheel
+	${PYTHON} ./setup.py sdist --formats=gztar,zip bdist_wheel
 
 tags:
 	find . -name '*.py' -print | etags -
@@ -57,16 +59,27 @@ tags:
 check: test
 
 test:
-	cd tests; make PYTHON=${PYTHON} test
+	cd tests; make test
 
-test2:
-	cd tests; make PYTHON=python test
-
-test3:
-	cd tests; make PYTHON=${PYTHON3} test
+test3: test
 
 lint:
 	pylint dns tests examples/*.py
 
-lint3:
-	pylint3 dns tests examples/*.py
+lint3: lint
+
+typecheck:
+	mypy examples tests dns
+
+potest:
+	poetry run pytest
+
+potype:
+	poetry run python -m mypy examples tests dns/*.py
+
+poflake:
+	poetry run flake8 dns
+
+pocov:
+	poetry run coverage run -m pytest
+	poetry run coverage html

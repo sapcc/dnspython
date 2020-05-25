@@ -6,7 +6,7 @@ Installation
 Requirements
 ------------
 
-Python 2.6 or later.
+Python 3.6 or later.
 
 Installation
 ------------
@@ -45,10 +45,10 @@ Optional Modules
 
 The following modules are optional, but recommended for full functionality.
 
-If ``pycrypto`` is installed, then dnspython will be able to do
-low-level DNSSEC RSA and DSA signature validation.
+If ``requests`` and ``requests-toolbelt`` are installed, then DNS-over-HTTPS
+will be available.
 
-If ``ecdsa`` is installed, then Elliptic Curve signature algorithms will
-be available for low-level DNSSEC signature validation.
+If ``cryptography`` is installed, then dnspython will be
+able to do low-level DNSSEC RSA, DSA, ECDSA and EdDSA signature validation.
 
 If ``idna`` is installed, then IDNA 2008 will be available.

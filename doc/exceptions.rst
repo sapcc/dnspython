@@ -50,6 +50,7 @@ dns.query Exceptions
 --------------------
 
 .. autoexception:: dns.query.BadResponse
+.. autoexception:: dns.query.NoDOH
 .. autoexception:: dns.query.UnexpectedSource
 .. autoexception:: dns.query.TransferError
 
@@ -85,3 +86,11 @@ dns.ttl Exceptions
 ------------------
 
 .. autoexception:: dns.ttl.BadTTL
+
+dns.zone Exceptions
+-------------------
+
+.. autoexception:: dns.zone.BadZone
+.. autoexception:: dns.zone.NoSOA
+.. autoexception:: dns.zone.NoNS
+.. autoexception:: dns.zone.UnknownOrigin

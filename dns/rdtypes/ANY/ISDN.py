@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -18,41 +20,37 @@ import struct
 import dns.exception
 import dns.rdata
 import dns.tokenizer
-from dns._compat import text_type
 
 
 class ISDN(dns.rdata.Rdata):
 
-    """ISDN record
+    """ISDN record"""
 
-    @ivar address: the ISDN address
-    @type address: string
-    @ivar subaddress: the ISDN subaddress (or '' if not present)
-    @type subaddress: string
-    @see: RFC 1183"""
+    # see: RFC 1183
 
     __slots__ = ['address', 'subaddress']
 
     def __init__(self, rdclass, rdtype, address, subaddress):
-        super(ISDN, self).__init__(rdclass, rdtype)
-        if isinstance(address, text_type):
-            self.address = address.encode()
+        super().__init__(rdclass, rdtype)
+        if isinstance(address, str):
+            object.__setattr__(self, 'address', address.encode())
         else:
-            self.address = address
-        if isinstance(address, text_type):
-            self.subaddress = subaddress.encode()
+            object.__setattr__(self, 'address', address)
+        if isinstance(address, str):
+            object.__setattr__(self, 'subaddress', subaddress.encode())
         else:
-            self.subaddress = subaddress
+            object.__setattr__(self, 'subaddress', subaddress)
 
     def to_text(self, origin=None, relativize=True, **kw):
         if self.subaddress:
-            return '"%s" "%s"' % (dns.rdata._escapify(self.address),
-                                  dns.rdata._escapify(self.subaddress))
+            return '"{}" "{}"'.format(dns.rdata._escapify(self.address),
+                                      dns.rdata._escapify(self.subaddress))
         else:
             return '"%s"' % dns.rdata._escapify(self.address)
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
         address = tok.get_string()
         t = tok.get()
         if not t.is_eol_or_eof():

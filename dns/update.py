@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -23,7 +25,6 @@ import dns.rdata
 import dns.rdataclass
 import dns.rdataset
 import dns.tsig
-from ._compat import string_types
 
 
 class Update(dns.message.Message):
@@ -35,10 +36,10 @@ class Update(dns.message.Message):
         See the documentation of the Message class for a complete
         description of the keyring dictionary.
 
-        *zone*, a ``dns.name.Name`` or ``text``, the zone which is being
+        *zone*, a ``dns.name.Name`` or ``str``, the zone which is being
         updated.
 
-        *rdclass*, an ``int`` or ``text``, the class of the zone.
+        *rdclass*, an ``int`` or ``str``, the class of the zone.
 
         *keyring*, a ``dict``, the TSIG keyring to use.  If a
         *keyring* is specified but a *keyname* is not, then the key
@@ -54,11 +55,10 @@ class Update(dns.message.Message):
         """
         super(Update, self).__init__()
         self.flags |= dns.opcode.to_flags(dns.opcode.UPDATE)
-        if isinstance(zone, string_types):
+        if isinstance(zone, str):
             zone = dns.name.from_text(zone)
         self.origin = zone
-        if isinstance(rdclass, string_types):
-            rdclass = dns.rdataclass.from_text(rdclass)
+        rdclass = dns.rdataclass.RdataClass.make(rdclass)
         self.zone_rdclass = rdclass
         self.find_rrset(self.question, self.origin, rdclass, dns.rdatatype.SOA,
                         create=True, force_unique=True)
@@ -91,7 +91,7 @@ class Update(dns.message.Message):
                 - ttl, rdtype, string...
         """
 
-        if isinstance(name, string_types):
+        if isinstance(name, str):
             name = dns.name.from_text(name, None)
         if isinstance(args[0], dns.rdataset.Rdataset):
             for rds in args:
@@ -108,9 +108,7 @@ class Update(dns.message.Message):
                 for rd in args:
                     self._add_rr(name, ttl, rd, section=section)
             else:
-                rdtype = args.pop(0)
-                if isinstance(rdtype, string_types):
-                    rdtype = dns.rdatatype.from_text(rdtype)
+                rdtype = dns.rdatatype.RdataType.make(args.pop(0))
                 if replace:
                     self.delete(name, rdtype)
                 for s in args:
@@ -148,7 +146,7 @@ class Update(dns.message.Message):
                 - rdtype, [string...]
         """
 
-        if isinstance(name, string_types):
+        if isinstance(name, str):
             name = dns.name.from_text(name, None)
         if len(args) == 0:
             self.find_rrset(self.authority, name, dns.rdataclass.ANY,
@@ -164,9 +162,7 @@ class Update(dns.message.Message):
                 for rd in args:
                     self._add_rr(name, 0, rd, dns.rdataclass.NONE)
             else:
-                rdtype = args.pop(0)
-                if isinstance(rdtype, string_types):
-                    rdtype = dns.rdatatype.from_text(rdtype)
+                rdtype = dns.rdatatype.RdataType.make(args.pop(0))
                 if len(args) == 0:
                     self.find_rrset(self.authority, name,
                                     self.zone_rdclass, rdtype,
@@ -212,7 +208,7 @@ class Update(dns.message.Message):
                 - rdtype, string...
         """
 
-        if isinstance(name, string_types):
+        if isinstance(name, str):
             name = dns.name.from_text(name, None)
         if len(args) == 0:
             self.find_rrset(self.answer, name,
@@ -228,9 +224,7 @@ class Update(dns.message.Message):
                 args.insert(0, 0)
             self._add(False, self.answer, name, *args)
         else:
-            rdtype = args[0]
-            if isinstance(rdtype, string_types):
-                rdtype = dns.rdatatype.from_text(rdtype)
+            rdtype = dns.rdatatype.RdataType.make(args[0])
             self.find_rrset(self.answer, name,
                             dns.rdataclass.ANY, rdtype,
                             dns.rdatatype.NONE, None,
@@ -240,7 +234,7 @@ class Update(dns.message.Message):
         """Require that an owner name (and optionally an rdata type) does
         not exist as a prerequisite to the execution of the update."""
 
-        if isinstance(name, string_types):
+        if isinstance(name, str):
             name = dns.name.from_text(name, None)
         if rdtype is None:
             self.find_rrset(self.answer, name,
@@ -248,8 +242,7 @@ class Update(dns.message.Message):
                             dns.rdatatype.NONE, None,
                             True, True)
         else:
-            if isinstance(rdtype, string_types):
-                rdtype = dns.rdatatype.from_text(rdtype)
+            rdtype = dns.rdatatype.RdataType.make(rdtype)
             self.find_rrset(self.answer, name,
                             dns.rdataclass.NONE, rdtype,
                             dns.rdatatype.NONE, None,
@@ -269,7 +262,7 @@ class Update(dns.message.Message):
         output; default is 0, which means "the message's request
         payload, if nonzero, or 65535".
 
-        Returns a ``binary``.
+        Returns a ``bytes``.
         """
 
         if origin is None:

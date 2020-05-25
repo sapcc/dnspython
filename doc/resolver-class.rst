@@ -12,13 +12,20 @@ The dns.resolver.Resolver and dns.resolver.Answer Classes
 
    .. attribute:: nameservers
 
-      A ``list`` of ``text``, each item containing an IPv4 or IPv6 address.
+      A ``list`` of ``str``, each item containing an IPv4 or IPv6 address.
 
    .. attribute:: search
 
       A ``list`` of dns.name.Name objects.  If the query name is a
       relative name, the resolver will construct absolute query names
       to try by appending values from the search list.
+
+   .. attribute:: use_search_by_default
+
+      A ``bool``, specifes whether or not ``resolve()`` uses the
+      search list configured in the system's resolver configuration
+      when the ``search`` parameter to ``resolve()`` is ``None``.  The
+      default is ``False``.
 
    .. attribute:: port
 
@@ -27,7 +34,7 @@ The dns.resolver.Resolver and dns.resolver.Answer Classes
 
    .. attribute:: nameserver_ports
 
-      A ``dict`` mapping an IPv4 or IPv6 address ``text`` to an ``int``.
+      A ``dict`` mapping an IPv4 or IPv6 address ``str`` to an ``int``.
       This specifies the port to use when sending to a nameserver.  If
       a port is not defined for an address, the value of the *port*
       attribute will be used.
@@ -43,7 +50,7 @@ The dns.resolver.Resolver and dns.resolver.Answer Classes
       answer to the question.  If the lifetime expires a
       ``dns.exception.Timeout`` exception will be raised.
 
-   .. attribute::  cache:
+   .. attribute::  cache
 
       An object implementing the caching protocol, e.g. a
       ``dns.resolver.Cache`` or a ``dns.resolver.LRUCache``.  The default
@@ -71,8 +78,11 @@ The dns.resolver.Resolver and dns.resolver.Answer Classes
         
    .. attribute:: keyalgorithm
 
-      A ``dns.name.Name`` or ``text``, the TSIG algorithm to use.
-      *edns*, an ``int``, is the EDNS level to use.  Specifying
+      A ``dns.name.Name`` or ``str``, the TSIG algorithm to use.
+
+   .. attribute:: edns
+
+      An ``int``, the EDNS level to use.  Specifying
       ``None``, ``False``, or ``-1`` means "do not use EDNS", and in
       this case the other parameters are ignored.  Specifying
       ``True`` is equivalent to specifying 0, i.e. "use EDNS0".

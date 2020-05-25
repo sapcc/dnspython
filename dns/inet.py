@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2017 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -20,8 +22,6 @@ import socket
 import dns.ipv4
 import dns.ipv6
 
-from ._compat import maybe_ord
-
 # We assume that AF_INET is always defined.
 
 AF_INET = socket.AF_INET
@@ -33,7 +33,7 @@ AF_INET = socket.AF_INET
 try:
     AF_INET6 = socket.AF_INET6
 except AttributeError:
-    AF_INET6 = 9999
+    AF_INET6 = 9999    # type: ignore
 
 
 def inet_pton(family, text):
@@ -41,18 +41,18 @@ def inet_pton(family, text):
 
     *family* is an ``int``, the address family.
 
-    *text* is a ``text``, the textual address.
+    *text* is a ``str``, the textual address.
 
     Raises ``NotImplementedError`` if the address family specified is not
     implemented.
 
-    Returns a ``binary``.
+    Returns a ``bytes``.
     """
 
     if family == AF_INET:
         return dns.ipv4.inet_aton(text)
     elif family == AF_INET6:
-        return dns.ipv6.inet_aton(text)
+        return dns.ipv6.inet_aton(text, True)
     else:
         raise NotImplementedError
 
@@ -62,12 +62,12 @@ def inet_ntop(family, address):
 
     *family* is an ``int``, the address family.
 
-    *address* is a ``binary``, the network address in binary form.
+    *address* is a ``bytes``, the network address in binary form.
 
     Raises ``NotImplementedError`` if the address family specified is not
     implemented.
 
-    Returns a ``text``.
+    Returns a ``str``.
     """
 
     if family == AF_INET:
@@ -81,7 +81,7 @@ def inet_ntop(family, address):
 def af_for_address(text):
     """Determine the address family of a textual-form network address.
 
-    *text*, a ``text``, the textual address.
+    *text*, a ``str``, the textual address.
 
     Raises ``ValueError`` if the address family cannot be determined
     from the input.
@@ -94,16 +94,16 @@ def af_for_address(text):
         return AF_INET
     except Exception:
         try:
-            dns.ipv6.inet_aton(text)
+            dns.ipv6.inet_aton(text, True)
             return AF_INET6
-        except:
+        except Exception:
             raise ValueError
 
 
 def is_multicast(text):
     """Is the textual-form network address a multicast address?
 
-    *text*, a ``text``, the textual address.
+    *text*, a ``str``, the textual address.
 
     Raises ``ValueError`` if the address family cannot be determined
     from the input.
@@ -112,11 +112,30 @@ def is_multicast(text):
     """
 
     try:
-        first = maybe_ord(dns.ipv4.inet_aton(text)[0])
+        first = dns.ipv4.inet_aton(text)[0]
         return first >= 224 and first <= 239
     except Exception:
         try:
-            first = maybe_ord(dns.ipv6.inet_aton(text)[0])
+            first = dns.ipv6.inet_aton(text, True)[0]
             return first == 255
         except Exception:
             raise ValueError
+
+
+def is_address(text):
+    """Is the specified string an IPv4 or IPv6 address?
+
+    *text*, a ``str``, the textual address.
+
+    Returns a ``bool``.
+    """
+
+    try:
+        dns.ipv4.inet_aton(text)
+        return True
+    except Exception:
+        try:
+            dns.ipv6.inet_aton(text, True)
+            return True
+        except Exception:
+            return False

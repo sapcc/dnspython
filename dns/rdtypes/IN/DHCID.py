@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2006, 2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -20,24 +22,22 @@ import dns.exception
 
 class DHCID(dns.rdata.Rdata):
 
-    """DHCID record
+    """DHCID record"""
 
-    @ivar data: the data (the content of the RR is opaque as far as the
-    DNS is concerned)
-    @type data: string
-    @see: RFC 4701"""
+    # see: RFC 4701
 
     __slots__ = ['data']
 
     def __init__(self, rdclass, rdtype, data):
-        super(DHCID, self).__init__(rdclass, rdtype)
-        self.data = data
+        super().__init__(rdclass, rdtype)
+        object.__setattr__(self, 'data', data)
 
     def to_text(self, origin=None, relativize=True, **kw):
         return dns.rdata._base64ify(self.data)
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
         chunks = []
         while 1:
             t = tok.get().unescape()

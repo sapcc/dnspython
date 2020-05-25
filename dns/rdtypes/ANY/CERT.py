@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -54,27 +56,19 @@ def _ctype_to_text(what):
 
 class CERT(dns.rdata.Rdata):
 
-    """CERT record
+    """CERT record"""
 
-    @ivar certificate_type: certificate type
-    @type certificate_type: int
-    @ivar key_tag: key tag
-    @type key_tag: int
-    @ivar algorithm: algorithm
-    @type algorithm: int
-    @ivar certificate: the certificate or CRL
-    @type certificate: string
-    @see: RFC 2538"""
+    # see RFC 2538
 
     __slots__ = ['certificate_type', 'key_tag', 'algorithm', 'certificate']
 
     def __init__(self, rdclass, rdtype, certificate_type, key_tag, algorithm,
                  certificate):
-        super(CERT, self).__init__(rdclass, rdtype)
-        self.certificate_type = certificate_type
-        self.key_tag = key_tag
-        self.algorithm = algorithm
-        self.certificate = certificate
+        super().__init__(rdclass, rdtype)
+        object.__setattr__(self, 'certificate_type', certificate_type)
+        object.__setattr__(self, 'key_tag', key_tag)
+        object.__setattr__(self, 'algorithm', algorithm)
+        object.__setattr__(self, 'certificate', certificate)
 
     def to_text(self, origin=None, relativize=True, **kw):
         certificate_type = _ctype_to_text(self.certificate_type)
@@ -83,7 +77,8 @@ class CERT(dns.rdata.Rdata):
                                 dns.rdata._base64ify(self.certificate))
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
         certificate_type = _ctype_from_text(tok.get_string())
         key_tag = tok.get_uint16()
         algorithm = dns.dnssec.algorithm_from_text(tok.get_string())

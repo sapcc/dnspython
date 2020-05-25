@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2006-2017 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -20,48 +22,55 @@ import struct
 import dns.exception
 import dns.rdata
 import dns.tokenizer
-from dns._compat import binary_type, string_types
 
 
 class TXTBase(dns.rdata.Rdata):
 
-    """Base class for rdata that is like a TXT record
-
-    @ivar strings: the strings
-    @type strings: list of binary
-    @see: RFC 1035"""
+    """Base class for rdata that is like a TXT record (see RFC 1035)."""
 
     __slots__ = ['strings']
 
     def __init__(self, rdclass, rdtype, strings):
-        super(TXTBase, self).__init__(rdclass, rdtype)
-        if isinstance(strings, binary_type) or \
-           isinstance(strings, string_types):
-            strings = [strings]
-        self.strings = []
+        """Initialize a TXT-like rdata.
+
+        *rdclass*, an ``int`` is the rdataclass of the Rdata.
+
+        *rdtype*, an ``int`` is the rdatatype of the Rdata.
+
+        *strings*, a tuple of ``bytes``
+        """
+        super().__init__(rdclass, rdtype)
+        if isinstance(strings, (bytes, str)):
+            strings = (strings,)
+        encoded_strings = []
         for string in strings:
-            if isinstance(string, string_types):
+            if isinstance(string, str):
                 string = string.encode()
-            self.strings.append(string)
+            else:
+                string = dns.rdata._constify(string)
+            encoded_strings.append(string)
+        object.__setattr__(self, 'strings', tuple(encoded_strings))
 
     def to_text(self, origin=None, relativize=True, **kw):
         txt = ''
         prefix = ''
         for s in self.strings:
-            txt += '%s"%s"' % (prefix, dns.rdata._escapify(s))
+            txt += '{}"{}"'.format(prefix, dns.rdata._escapify(s))
             prefix = ' '
         return txt
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
         strings = []
         max_str_len = 255
         while 1:
-            token = tok.get().unescape()
+            token = tok.get().unescape_to_bytes()
             if token.is_eol_or_eof():
                 break
             if not (token.is_quoted_string() or token.is_identifier()):
                 raise dns.exception.SyntaxError("expected a string")
+
             if len(token.value) > max_str_len:
                 if isinstance(token.value, binary_type):
                     value = token.value
@@ -76,6 +85,7 @@ class TXTBase(dns.rdata.Rdata):
                     strings.append(value)
                 else:
                     strings.append(value.encode())
+
         if len(strings) == 0:
             raise dns.exception.UnexpectedEnd
         return cls(rdclass, rdtype, strings)

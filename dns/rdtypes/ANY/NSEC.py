@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2004-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -19,43 +21,36 @@ import dns.exception
 import dns.rdata
 import dns.rdatatype
 import dns.name
-from dns._compat import xrange
 
 
 class NSEC(dns.rdata.Rdata):
 
-    """NSEC record
-
-    @ivar next: the next name
-    @type next: dns.name.Name object
-    @ivar windows: the windowed bitmap list
-    @type windows: list of (window number, string) tuples"""
+    """NSEC record"""
 
     __slots__ = ['next', 'windows']
 
     def __init__(self, rdclass, rdtype, next, windows):
-        super(NSEC, self).__init__(rdclass, rdtype)
-        self.next = next
-        self.windows = windows
+        super().__init__(rdclass, rdtype)
+        object.__setattr__(self, 'next', next)
+        object.__setattr__(self, 'windows', dns.rdata._constify(windows))
 
     def to_text(self, origin=None, relativize=True, **kw):
         next = self.next.choose_relativity(origin, relativize)
         text = ''
         for (window, bitmap) in self.windows:
             bits = []
-            for i in xrange(0, len(bitmap)):
-                byte = bitmap[i]
-                for j in xrange(0, 8):
+            for (i, byte) in enumerate(bitmap):
+                for j in range(0, 8):
                     if byte & (0x80 >> j):
                         bits.append(dns.rdatatype.to_text(window * 256 +
                                                           i * 8 + j))
             text += (' ' + ' '.join(bits))
-        return '%s%s' % (next, text)
+        return '{}{}'.format(next, text)
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
-        next = tok.get_name()
-        next = next.choose_relativity(origin, relativize)
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
+        next = tok.get_name(origin, relativize, relativize_to)
         rdtypes = []
         while 1:
             token = tok.get().unescape()
@@ -121,6 +116,3 @@ class NSEC(dns.rdata.Rdata):
         if origin is not None:
             next = next.relativize(origin)
         return cls(rdclass, rdtype, next, windows)
-
-    def choose_relativity(self, origin=None, relativize=True):
-        self.next = self.next.choose_relativity(origin, relativize)

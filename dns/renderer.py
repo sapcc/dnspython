@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2001-2017 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -15,14 +17,13 @@
 
 """Help for building DNS wire format messages"""
 
-from io import BytesIO
+import io
 import struct
 import random
 import time
 
 import dns.exception
 import dns.tsig
-from ._compat import long
 
 
 QUESTION = 0
@@ -53,7 +54,7 @@ class Renderer(object):
         r.add_tsig(keyname, secret, 300, 1, 0, '', request_mac)
         wire = r.get_wire()
 
-    output, a BytesIO, where rendering is written
+    output, an io.BytesIO, where rendering is written
 
     id: the message id
 
@@ -75,7 +76,7 @@ class Renderer(object):
     def __init__(self, id=None, flags=0, max_size=65535, origin=None):
         """Initialize a new renderer."""
 
-        self.output = BytesIO()
+        self.output = io.BytesIO()
         if id is None:
             self.id = random.randint(0, 65535)
         else:
@@ -170,7 +171,7 @@ class Renderer(object):
         """Add an EDNS OPT record to the message."""
 
         # make sure the EDNS version in ednsflags agrees with edns
-        ednsflags &= long(0xFF00FFFF)
+        ednsflags &= 0xFF00FFFF
         ednsflags |= (edns << 16)
         self._set_section(ADDITIONAL)
         before = self.output.tell()

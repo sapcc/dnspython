@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2004-2017 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -15,27 +17,17 @@
 
 import base64
 import binascii
-import string
 import struct
 
 import dns.exception
 import dns.rdata
 import dns.rdatatype
-from dns._compat import xrange, text_type, PY3
 
-# pylint: disable=deprecated-string-function
-if PY3:
-    b32_hex_to_normal = bytes.maketrans(b'0123456789ABCDEFGHIJKLMNOPQRSTUV',
-                                        b'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')
-    b32_normal_to_hex = bytes.maketrans(b'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567',
-                                        b'0123456789ABCDEFGHIJKLMNOPQRSTUV')
-else:
-    b32_hex_to_normal = string.maketrans('0123456789ABCDEFGHIJKLMNOPQRSTUV',
-                                         'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')
-    b32_normal_to_hex = string.maketrans('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567',
-                                         '0123456789ABCDEFGHIJKLMNOPQRSTUV')
-# pylint: enable=deprecated-string-function
 
+b32_hex_to_normal = bytes.maketrans(b'0123456789ABCDEFGHIJKLMNOPQRSTUV',
+                                    b'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')
+b32_normal_to_hex = bytes.maketrans(b'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567',
+                                    b'0123456789ABCDEFGHIJKLMNOPQRSTUV')
 
 # hash algorithm constants
 SHA1 = 1
@@ -46,35 +38,22 @@ OPTOUT = 1
 
 class NSEC3(dns.rdata.Rdata):
 
-    """NSEC3 record
-
-    @ivar algorithm: the hash algorithm number
-    @type algorithm: int
-    @ivar flags: the flags
-    @type flags: int
-    @ivar iterations: the number of iterations
-    @type iterations: int
-    @ivar salt: the salt
-    @type salt: string
-    @ivar next: the next name hash
-    @type next: string
-    @ivar windows: the windowed bitmap list
-    @type windows: list of (window number, string) tuples"""
+    """NSEC3 record"""
 
     __slots__ = ['algorithm', 'flags', 'iterations', 'salt', 'next', 'windows']
 
     def __init__(self, rdclass, rdtype, algorithm, flags, iterations, salt,
                  next, windows):
-        super(NSEC3, self).__init__(rdclass, rdtype)
-        self.algorithm = algorithm
-        self.flags = flags
-        self.iterations = iterations
-        if isinstance(salt, text_type):
-            self.salt = salt.encode()
+        super().__init__(rdclass, rdtype)
+        object.__setattr__(self, 'algorithm', algorithm)
+        object.__setattr__(self, 'flags', flags)
+        object.__setattr__(self, 'iterations', iterations)
+        if isinstance(salt, str):
+            object.__setattr__(self, 'salt', salt.encode())
         else:
-            self.salt = salt
-        self.next = next
-        self.windows = windows
+            object.__setattr__(self, 'salt', salt)
+        object.__setattr__(self, 'next', next)
+        object.__setattr__(self, 'windows', dns.rdata._constify(windows))
 
     def to_text(self, origin=None, relativize=True, **kw):
         next = base64.b32encode(self.next).translate(
@@ -83,26 +62,26 @@ class NSEC3(dns.rdata.Rdata):
             salt = '-'
         else:
             salt = binascii.hexlify(self.salt).decode()
-        text = u''
+        text = ''
         for (window, bitmap) in self.windows:
             bits = []
-            for i in xrange(0, len(bitmap)):
-                byte = bitmap[i]
-                for j in xrange(0, 8):
+            for (i, byte) in enumerate(bitmap):
+                for j in range(0, 8):
                     if byte & (0x80 >> j):
                         bits.append(dns.rdatatype.to_text(window * 256 +
                                                           i * 8 + j))
-            text += (u' ' + u' '.join(bits))
-        return u'%u %u %u %s %s%s' % (self.algorithm, self.flags,
-                                      self.iterations, salt, next, text)
+            text += (' ' + ' '.join(bits))
+        return '%u %u %u %s %s%s' % (self.algorithm, self.flags,
+                                     self.iterations, salt, next, text)
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
         algorithm = tok.get_uint8()
         flags = tok.get_uint8()
         iterations = tok.get_uint16()
         salt = tok.get_string()
-        if salt == u'-':
+        if salt == '-':
             salt = b''
         else:
             salt = binascii.unhexlify(salt.encode('ascii'))
@@ -133,7 +112,7 @@ class NSEC3(dns.rdata.Rdata):
             new_window = nrdtype // 256
             if new_window != window:
                 if octets != 0:
-                    windows.append((window, ''.join(bitmap[0:octets])))
+                    windows.append((window, bitmap[0:octets]))
                 bitmap = bytearray(b'\0' * 32)
                 window = new_window
             offset = nrdtype % 256

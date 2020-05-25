@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -18,31 +20,29 @@ import struct
 import dns.exception
 import dns.rdata
 import dns.tokenizer
-from dns._compat import text_type
 
 
 class X25(dns.rdata.Rdata):
 
-    """X25 record
+    """X25 record"""
 
-    @ivar address: the PSDN address
-    @type address: string
-    @see: RFC 1183"""
+    # see RFC 1183
 
     __slots__ = ['address']
 
     def __init__(self, rdclass, rdtype, address):
-        super(X25, self).__init__(rdclass, rdtype)
-        if isinstance(address, text_type):
-            self.address = address.encode()
+        super().__init__(rdclass, rdtype)
+        if isinstance(address, str):
+            object.__setattr__(self, 'address', address.encode())
         else:
-            self.address = address
+            object.__setattr__(self, 'address', address)
 
     def to_text(self, origin=None, relativize=True, **kw):
         return '"%s"' % dns.rdata._escapify(self.address)
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
         address = tok.get_string()
         tok.get_eol()
         return cls(rdclass, rdtype, address)

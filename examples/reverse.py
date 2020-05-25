@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Usage: reverse.py <zone_filename>...
 #
@@ -16,27 +16,25 @@
 # If this weren't a demo script, there'd be a way of specifying the
 # origin for each zone instead of constructing it from the filename.
 
-from __future__ import print_function
-
 import dns.zone
 import dns.ipv4
 import os.path
 import sys
+from typing import Dict, List # pylint: disable=unused-import
 
-reverse_map = {}
+reverse_map = {} # type: Dict[str, List[str]]
 
 for filename in sys.argv[1:]:
     zone = dns.zone.from_file(filename, os.path.basename(filename),
                               relativize=False)
     for (name, ttl, rdata) in zone.iterate_rdatas('A'):
+        print(type(rdata))
         try:
             reverse_map[rdata.address].append(name.to_text())
         except KeyError:
             reverse_map[rdata.address] = [name.to_text()]
 
-keys = reverse_map.keys()
-keys.sort(key=dns.ipv4.inet_aton)
-for k in keys:
+for k in sorted(reverse_map.keys(), key=dns.ipv4.inet_aton):
     v = reverse_map[k]
     v.sort()
     print(k, v)

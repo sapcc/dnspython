@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2001-2017 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -15,32 +17,30 @@
 
 """DNS Opcodes."""
 
+import dns.enum
 import dns.exception
 
-#: Query
-QUERY = 0
-#: Inverse Query (historical)
-IQUERY = 1
-#: Server Status (unspecified and unimplemented anywhere)
-STATUS = 2
-#: Notify
-NOTIFY = 4
-#: Dynamic Update
-UPDATE = 5
+class Opcode(dns.enum.IntEnum):
+    #: Query
+    QUERY = 0
+    #: Inverse Query (historical)
+    IQUERY = 1
+    #: Server Status (unspecified and unimplemented anywhere)
+    STATUS = 2
+    #: Notify
+    NOTIFY = 4
+    #: Dynamic Update
+    UPDATE = 5
 
-_by_text = {
-    'QUERY': QUERY,
-    'IQUERY': IQUERY,
-    'STATUS': STATUS,
-    'NOTIFY': NOTIFY,
-    'UPDATE': UPDATE
-}
+    @classmethod
+    def _maximum(cls):
+        return 15
 
-# We construct the inverse mapping programmatically to ensure that we
-# cannot make any mistakes (e.g. omissions, cut-and-paste errors) that
-# would cause the mapping not to be true inverse.
+    @classmethod
+    def _unknown_exception_class(cls):
+        return UnknownOpcode
 
-_by_value = dict((y, x) for x, y in _by_text.items())
+globals().update(Opcode.__members__)
 
 
 class UnknownOpcode(dns.exception.DNSException):
@@ -50,21 +50,14 @@ class UnknownOpcode(dns.exception.DNSException):
 def from_text(text):
     """Convert text into an opcode.
 
-    *text*, a ``text``, the textual opcode
+    *text*, a ``str``, the textual opcode
 
     Raises ``dns.opcode.UnknownOpcode`` if the opcode is unknown.
 
     Returns an ``int``.
     """
 
-    if text.isdigit():
-        value = int(text)
-        if value >= 0 and value <= 15:
-            return value
-    value = _by_text.get(text.upper())
-    if value is None:
-        raise UnknownOpcode
-    return value
+    return Opcode.from_text(text)
 
 
 def from_flags(flags):
@@ -97,13 +90,10 @@ def to_text(value):
 
     Raises ``dns.opcode.UnknownOpcode`` if the opcode is unknown.
 
-    Returns a ``text``.
+    Returns a ``str``.
     """
 
-    text = _by_value.get(value)
-    if text is None:
-        text = str(value)
-    return text
+    return Opcode.to_text(value)
 
 
 def is_update(flags):
@@ -114,4 +104,4 @@ def is_update(flags):
     Returns a ``bool``.
     """
 
-    return from_flags(flags) == UPDATE
+    return from_flags(flags) == Opcode.UPDATE

@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-
-from __future__ import print_function
+#!/usr/bin/env python3
 
 import dns.e164
 n = dns.e164.from_e164("+1 555 1212")

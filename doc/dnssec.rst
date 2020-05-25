@@ -4,11 +4,20 @@
 DNSSEC
 ======
 
-Dnspython can do simple DNSSEC signature validation, but
-currently has no facilities for signing.  In order to
-use DNSSEC functions, you must have ``pycrypto`` installed.
-If you want to do elliptic curves, you must also have
-``ecdsa`` installed.
+Dnspython can do simple DNSSEC signature validation, but currently has no
+facilities for signing.  In order to use DNSSEC functions, you must have
+``python cryptography`` installed.
+
+DNSSEC Functions
+----------------
+
+.. autofunction:: dns.dnssec.algorithm_from_text
+.. autofunction:: dns.dnssec.algorithm_to_text
+.. autofunction:: dns.dnssec.key_id
+.. autofunction:: dns.dnssec.make_ds
+.. autofunction:: dns.dnssec.validate
+.. autofunction:: dns.dnssec.validate_rrsig
+.. autofunction:: dns.dnssec.nsec3_hash
 
 DNSSEC Algorithms
 -----------------
@@ -27,13 +36,3 @@ DNSSEC Algorithms
 .. autodata:: dns.dnssec.INDIRECT
 .. autodata:: dns.dnssec.PRIVATEDNS
 .. autodata:: dns.dnssec.PRIVATEOID
-
-DNSSEC Functions
-----------------
-
-.. autofunction:: dns.dnssec.algorithm_from_text
-.. autofunction:: dns.dnssec.algorithm_to_text
-.. autofunction:: dns.dnssec.key_id
-.. autofunction:: dns.dnssec.make_ds
-.. autofunction:: dns.dnssec.validate
-.. autofunction:: dns.dnssec.validate_rrsig

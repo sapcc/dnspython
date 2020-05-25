@@ -10,3 +10,7 @@ tests/*.out
 .tox
 dnspython.egg-info/
 .eggs/
+.mypy_cache/
+.python-version
+poetry.lock
+htmlcov

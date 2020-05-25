@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2005-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -22,27 +24,19 @@ import dns.rdatatype
 
 class TLSA(dns.rdata.Rdata):
 
-    """TLSA record
+    """TLSA record"""
 
-    @ivar usage: The certificate usage
-    @type usage: int
-    @ivar selector: The selector field
-    @type selector: int
-    @ivar mtype: The 'matching type' field
-    @type mtype: int
-    @ivar cert: The 'Certificate Association Data' field
-    @type cert: string
-    @see: RFC 6698"""
+    # see: RFC 6698
 
     __slots__ = ['usage', 'selector', 'mtype', 'cert']
 
     def __init__(self, rdclass, rdtype, usage, selector,
                  mtype, cert):
-        super(TLSA, self).__init__(rdclass, rdtype)
-        self.usage = usage
-        self.selector = selector
-        self.mtype = mtype
-        self.cert = cert
+        super().__init__(rdclass, rdtype)
+        object.__setattr__(self, 'usage', usage)
+        object.__setattr__(self, 'selector', selector)
+        object.__setattr__(self, 'mtype', mtype)
+        object.__setattr__(self, 'cert', cert)
 
     def to_text(self, origin=None, relativize=True, **kw):
         return '%d %d %d %s' % (self.usage,
@@ -52,7 +46,8 @@ class TLSA(dns.rdata.Rdata):
                                                   chunksize=128))
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
         usage = tok.get_uint8()
         selector = tok.get_uint8()
         mtype = tok.get_uint8()

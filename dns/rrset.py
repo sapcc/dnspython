@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2017 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -20,7 +22,6 @@ import dns.name
 import dns.rdataset
 import dns.rdataclass
 import dns.renderer
-from ._compat import string_types
 
 
 class RRset(dns.rdataset.Rdataset):
@@ -61,7 +62,8 @@ class RRset(dns.rdataset.Rdataset):
             dtext = ''
         return '<DNS ' + str(self.name) + ' ' + \
                dns.rdataclass.to_text(self.rdclass) + ' ' + \
-               dns.rdatatype.to_text(self.rdtype) + ctext + dtext + ' RRset>'
+               dns.rdatatype.to_text(self.rdtype) + ctext + dtext + \
+               ' RRset: ' + self._rdata_repr() + '>'
 
     def __str__(self):
         return self.to_text()
@@ -129,19 +131,21 @@ def from_text_list(name, ttl, rdclass, rdtype, text_rdatas,
     """Create an RRset with the specified name, TTL, class, and type, and with
     the specified list of rdatas in text format.
 
+    *idna_codec*, a ``dns.name.IDNACodec``, specifies the IDNA
+    encoder/decoder to use; if ``None``, the default IDNA 2003
+    encoder/decoder is used.
+
     Returns a ``dns.rrset.RRset`` object.
     """
 
-    if isinstance(name, string_types):
+    if isinstance(name, str):
         name = dns.name.from_text(name, None, idna_codec=idna_codec)
-    if isinstance(rdclass, string_types):
-        rdclass = dns.rdataclass.from_text(rdclass)
-    if isinstance(rdtype, string_types):
-        rdtype = dns.rdatatype.from_text(rdtype)
+    rdclass = dns.rdataclass.RdataClass.make(rdclass)
+    rdtype = dns.rdatatype.RdataType.make(rdtype)
     r = RRset(name, rdclass, rdtype)
     r.update_ttl(ttl)
     for t in text_rdatas:
-        rd = dns.rdata.from_text(r.rdclass, r.rdtype, t)
+        rd = dns.rdata.from_text(r.rdclass, r.rdtype, t, idna_codec=idna_codec)
         r.add(rd)
     return r
 
@@ -160,10 +164,15 @@ def from_rdata_list(name, ttl, rdatas, idna_codec=None):
     """Create an RRset with the specified name and TTL, and with
     the specified list of rdata objects.
 
+    *idna_codec*, a ``dns.name.IDNACodec``, specifies the IDNA
+    encoder/decoder to use; if ``None``, the default IDNA 2003
+    encoder/decoder is used.
+
     Returns a ``dns.rrset.RRset`` object.
+
     """
 
-    if isinstance(name, string_types):
+    if isinstance(name, str):
         name = dns.name.from_text(name, None, idna_codec=idna_codec)
 
     if len(rdatas) == 0:

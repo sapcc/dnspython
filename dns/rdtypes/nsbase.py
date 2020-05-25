@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -15,7 +17,7 @@
 
 """NS-like base classes."""
 
-from io import BytesIO
+import io
 
 import dns.exception
 import dns.rdata
@@ -24,25 +26,22 @@ import dns.name
 
 class NSBase(dns.rdata.Rdata):
 
-    """Base class for rdata that is like an NS record.
-
-    @ivar target: the target name of the rdata
-    @type target: dns.name.Name object"""
+    """Base class for rdata that is like an NS record."""
 
     __slots__ = ['target']
 
     def __init__(self, rdclass, rdtype, target):
-        super(NSBase, self).__init__(rdclass, rdtype)
-        self.target = target
+        super().__init__(rdclass, rdtype)
+        object.__setattr__(self, 'target', target)
 
     def to_text(self, origin=None, relativize=True, **kw):
         target = self.target.choose_relativity(origin, relativize)
         return str(target)
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
-        target = tok.get_name()
-        target = target.choose_relativity(origin, relativize)
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
+        target = tok.get_name(origin, relativize, relativize_to)
         tok.get_eol()
         return cls(rdclass, rdtype, target)
 
@@ -62,9 +61,6 @@ class NSBase(dns.rdata.Rdata):
             target = target.relativize(origin)
         return cls(rdclass, rdtype, target)
 
-    def choose_relativity(self, origin=None, relativize=True):
-        self.target = self.target.choose_relativity(origin, relativize)
-
 
 class UncompressedNS(NSBase):
 
@@ -76,6 +72,6 @@ class UncompressedNS(NSBase):
         super(UncompressedNS, self).to_wire(file, None, origin)
 
     def to_digestable(self, origin=None):
-        f = BytesIO()
+        f = io.BytesIO()
         self.to_wire(f, None, origin)
         return f.getvalue()

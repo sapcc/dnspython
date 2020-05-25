@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2004-2007, 2009-2011, 2016 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -19,34 +21,25 @@ import dns.exception
 import dns.rdata
 import dns.rdatatype
 import dns.name
-from dns._compat import xrange
 
 class CSYNC(dns.rdata.Rdata):
 
-    """CSYNC record
-
-    @ivar serial: the SOA serial number
-    @type serial: int
-    @ivar flags: the CSYNC flags
-    @type flags: int
-    @ivar windows: the windowed bitmap list
-    @type windows: list of (window number, string) tuples"""
+    """CSYNC record"""
 
     __slots__ = ['serial', 'flags', 'windows']
 
     def __init__(self, rdclass, rdtype, serial, flags, windows):
-        super(CSYNC, self).__init__(rdclass, rdtype)
-        self.serial = serial
-        self.flags = flags
-        self.windows = windows
+        super().__init__(rdclass, rdtype)
+        object.__setattr__(self, 'serial', serial)
+        object.__setattr__(self, 'flags', flags)
+        object.__setattr__(self, 'windows', dns.rdata._constify(windows))
 
     def to_text(self, origin=None, relativize=True, **kw):
         text = ''
         for (window, bitmap) in self.windows:
             bits = []
-            for i in xrange(0, len(bitmap)):
-                byte = bitmap[i]
-                for j in xrange(0, 8):
+            for (i, byte) in enumerate(bitmap):
+                for j in range(0, 8):
                     if byte & (0x80 >> j):
                         bits.append(dns.rdatatype.to_text(window * 256 +
                                                           i * 8 + j))
@@ -54,7 +47,8 @@ class CSYNC(dns.rdata.Rdata):
         return '%d %d%s' % (self.serial, self.flags, text)
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
         serial = tok.get_uint32()
         flags = tok.get_uint16()
         rdtypes = []

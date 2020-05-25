@@ -1,4 +1,6 @@
 # -*- coding: utf-8
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -14,12 +16,7 @@
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-from __future__ import print_function
-
-try:
-    import unittest2 as unittest
-except ImportError:
-    import unittest
+import unittest
 
 from io import BytesIO
 
@@ -55,9 +52,57 @@ class OptionTestCase(unittest.TestCase):
         data = io.getvalue()
         self.assertEqual(data, b'\x00\x01\x18\x00\x01\x02\x03')
 
+    def testECSOption25(self):
+        opt = dns.edns.ECSOption('1.2.3.255', 25)
+        io = BytesIO()
+        opt.to_wire(io)
+        data = io.getvalue()
+        self.assertEqual(data, b'\x00\x01\x19\x00\x01\x02\x03\x80')
+
     def testECSOption_v6(self):
         opt = dns.edns.ECSOption('2001:4b98::1')
         io = BytesIO()
         opt.to_wire(io)
         data = io.getvalue()
         self.assertEqual(data, b'\x00\x02\x38\x00\x20\x01\x4b\x98\x00\x00\x00')
+
+    def testECSOption_from_text_valid(self):
+        ecs1 = dns.edns.ECSOption.from_text('1.2.3.4/24/0')
+        self.assertEqual(ecs1, dns.edns.ECSOption('1.2.3.4', 24, 0))
+
+        ecs2 = dns.edns.ECSOption.from_text('1.2.3.4/24')
+        self.assertEqual(ecs2, dns.edns.ECSOption('1.2.3.4', 24, 0))
+
+        ecs3 = dns.edns.ECSOption.from_text('ECS 1.2.3.4/24')
+        self.assertEqual(ecs3, dns.edns.ECSOption('1.2.3.4', 24, 0))
+
+        ecs4 = dns.edns.ECSOption.from_text('ECS 1.2.3.4/24/32')
+        self.assertEqual(ecs4, dns.edns.ECSOption('1.2.3.4', 24, 32))
+
+        ecs5 = dns.edns.ECSOption.from_text('2001:4b98::1/64/56')
+        self.assertEqual(ecs5, dns.edns.ECSOption('2001:4b98::1', 64, 56))
+
+        ecs6 = dns.edns.ECSOption.from_text('2001:4b98::1/64')
+        self.assertEqual(ecs6, dns.edns.ECSOption('2001:4b98::1', 64, 0))
+
+        ecs7 = dns.edns.ECSOption.from_text('ECS 2001:4b98::1/0')
+        self.assertEqual(ecs7, dns.edns.ECSOption('2001:4b98::1', 0, 0))
+
+        ecs8 = dns.edns.ECSOption.from_text('ECS 2001:4b98::1/64/128')
+        self.assertEqual(ecs8, dns.edns.ECSOption('2001:4b98::1', 64, 128))
+
+    def testECSOption_from_text_invalid(self):
+        with self.assertRaises(ValueError):
+            dns.edns.ECSOption.from_text('some random text 1.2.3.4/24/0 24')
+
+        with self.assertRaises(ValueError):
+            dns.edns.ECSOption.from_text('1.2.3.4/twentyfour')
+
+        with self.assertRaises(ValueError):
+            dns.edns.ECSOption.from_text('1.2.3.4/24/O') # <-- that's not a zero
+
+        with self.assertRaises(ValueError):
+            dns.edns.ECSOption.from_text('')
+
+        with self.assertRaises(ValueError):
+            dns.edns.ECSOption.from_text('1.2.3.4/2001:4b98::1/24')

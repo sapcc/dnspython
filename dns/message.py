@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2001-2017 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -15,9 +17,8 @@
 
 """DNS Messages"""
 
-from __future__ import absolute_import
-
-from io import StringIO
+import contextlib
+import io
 import struct
 import time
 
@@ -36,8 +37,6 @@ import dns.renderer
 import dns.tsig
 import dns.wiredata
 
-from ._compat import long, xrange, string_types
-
 
 class ShortHeader(dns.exception.FormError):
     """The DNS packet passed to from_wire() is too short."""
@@ -53,7 +52,7 @@ class UnknownHeaderField(dns.exception.DNSException):
 
 
 class BadEDNS(dns.exception.FormError):
-    """An OPT record occurred somewhere other than the start of
+    """An OPT record occurred somewhere other than
     the additional data section."""
 
 
@@ -64,6 +63,19 @@ class BadTSIG(dns.exception.FormError):
 
 class UnknownTSIGKey(dns.exception.DNSException):
     """A TSIG with an unknown key was received."""
+
+
+class Truncated(dns.exception.DNSException):
+    """The truncated flag is set."""
+
+    supp_kwargs = {'message'}
+
+    def message(self):
+        """As much of the message as could be processed.
+
+        Returns a ``dns.message.Message``.
+        """
+        return self.kwargs['message']
 
 
 #: The question section number
@@ -125,50 +137,50 @@ class Message(object):
         The *origin*, *relativize*, and any other keyword
         arguments are passed to the RRset ``to_wire()`` method.
 
-        Returns a ``text``.
+        Returns a ``str``.
         """
 
-        s = StringIO()
-        s.write(u'id %d\n' % self.id)
-        s.write(u'opcode %s\n' %
+        s = io.StringIO()
+        s.write('id %d\n' % self.id)
+        s.write('opcode %s\n' %
                 dns.opcode.to_text(dns.opcode.from_flags(self.flags)))
         rc = dns.rcode.from_flags(self.flags, self.ednsflags)
-        s.write(u'rcode %s\n' % dns.rcode.to_text(rc))
-        s.write(u'flags %s\n' % dns.flags.to_text(self.flags))
+        s.write('rcode %s\n' % dns.rcode.to_text(rc))
+        s.write('flags %s\n' % dns.flags.to_text(self.flags))
         if self.edns >= 0:
-            s.write(u'edns %s\n' % self.edns)
+            s.write('edns %s\n' % self.edns)
             if self.ednsflags != 0:
-                s.write(u'eflags %s\n' %
+                s.write('eflags %s\n' %
                         dns.flags.edns_to_text(self.ednsflags))
-            s.write(u'payload %d\n' % self.payload)
+            s.write('payload %d\n' % self.payload)
         for opt in self.options:
-            s.write(u'option %s\n' % opt.to_text())
+            s.write('option %s\n' % opt.to_text())
         is_update = dns.opcode.is_update(self.flags)
         if is_update:
-            s.write(u';ZONE\n')
+            s.write(';ZONE\n')
         else:
-            s.write(u';QUESTION\n')
+            s.write(';QUESTION\n')
         for rrset in self.question:
             s.write(rrset.to_text(origin, relativize, **kw))
-            s.write(u'\n')
+            s.write('\n')
         if is_update:
-            s.write(u';PREREQ\n')
+            s.write(';PREREQ\n')
         else:
-            s.write(u';ANSWER\n')
+            s.write(';ANSWER\n')
         for rrset in self.answer:
             s.write(rrset.to_text(origin, relativize, **kw))
-            s.write(u'\n')
+            s.write('\n')
         if is_update:
-            s.write(u';UPDATE\n')
+            s.write(';UPDATE\n')
         else:
-            s.write(u';AUTHORITY\n')
+            s.write(';AUTHORITY\n')
         for rrset in self.authority:
             s.write(rrset.to_text(origin, relativize, **kw))
-            s.write(u'\n')
-        s.write(u';ADDITIONAL\n')
+            s.write('\n')
+        s.write(';ADDITIONAL\n')
         for rrset in self.additional:
             s.write(rrset.to_text(origin, relativize, **kw))
-            s.write(u'\n')
+            s.write('\n')
         #
         # We strip off the final \n so the caller can print the result without
         # doing weird things to get around eccentricities in Python print
@@ -213,7 +225,7 @@ class Message(object):
         return not self.__eq__(other)
 
     def is_response(self, other):
-        """Is this message a response to *other*?
+        """Is *other* a response this message?
 
         Returns a ``bool``.
         """
@@ -403,7 +415,7 @@ class Message(object):
 
         Raises ``dns.exception.TooBig`` if *max_size* was exceeded.
 
-        Returns a ``binary``.
+        Returns a ``bytes``.
         """
 
         if max_size == 0:
@@ -461,7 +473,7 @@ class Message(object):
 
         *tsig_error*, an ``int``, the TSIG error code.
 
-        *other_data*, a ``binary``, the TSIG other data.
+        *other_data*, a ``bytes``, the TSIG other data.
 
         *algorithm*, a ``dns.name.Name``, the TSIG algorithm to use.
         """
@@ -470,7 +482,7 @@ class Message(object):
         if keyname is None:
             self.keyname = list(self.keyring.keys())[0]
         else:
-            if isinstance(keyname, string_types):
+            if isinstance(keyname, str):
                 keyname = dns.name.from_text(keyname)
             self.keyname = keyname
         self.keyalgorithm = algorithm
@@ -518,7 +530,7 @@ class Message(object):
             options = []
         else:
             # make sure the EDNS version in ednsflags agrees with edns
-            ednsflags &= long(0xFF00FFFF)
+            ednsflags &= 0xFF00FFFF
             ednsflags |= (edns << 16)
             if options is None:
                 options = []
@@ -559,7 +571,7 @@ class Message(object):
         (value, evalue) = dns.rcode.to_flags(rcode)
         self.flags &= 0xFFF0
         self.flags |= value
-        self.ednsflags &= long(0x00FFFFFF)
+        self.ednsflags &= 0x00FFFFFF
         self.ednsflags |= evalue
         if self.ednsflags != 0 and self.edns < 0:
             self.edns = 0
@@ -615,7 +627,7 @@ class _WireReader(object):
         if self.updating and qcount > 1:
             raise dns.exception.FormError
 
-        for i in xrange(0, qcount):
+        for i in range(0, qcount):
             (qname, used) = dns.name.from_wire(self.wire, self.current)
             if self.message.origin is not None:
                 qname = qname.relativize(self.message.origin)
@@ -643,7 +655,7 @@ class _WireReader(object):
         else:
             force_unique = False
         seen_opt = False
-        for i in xrange(0, count):
+        for i in range(0, count):
             rr_start = self.current
             (name, used) = dns.name.from_wire(self.wire, self.current)
             absolute_name = name
@@ -739,6 +751,7 @@ class _WireReader(object):
         (self.message.id, self.message.flags, qcount, ancount,
          aucount, adcount) = struct.unpack('!HHHHHH', self.wire[:12])
         self.current = 12
+        self.message.original_id = self.message.id
         if dns.opcode.is_update(self.message.flags):
             self.updating = True
         self._get_question(qcount)
@@ -757,13 +770,13 @@ class _WireReader(object):
 def from_wire(wire, keyring=None, request_mac=b'', xfr=False, origin=None,
               tsig_ctx=None, multi=False, first=True,
               question_only=False, one_rr_per_rrset=False,
-              ignore_trailing=False):
+              ignore_trailing=False, raise_on_truncation=False):
     """Convert a DNS wire format message into a message
     object.
 
     *keyring*, a ``dict``, the keyring to use if the message is signed.
 
-    *request_mac*, a ``binary``.  If the message is a response to a
+    *request_mac*, a ``bytes``.  If the message is a response to a
     TSIG-signed request, *request_mac* should be set to the MAC of
     that request.
 
@@ -792,6 +805,9 @@ def from_wire(wire, keyring=None, request_mac=b'', xfr=False, origin=None,
     *ignore_trailing*, a ``bool``.  If ``True``, ignore trailing
     junk at end of the message.
 
+    *raise_on_truncation*, a ``bool``.  If ``True``, raise an exception if
+    the TC bit is set.
+
     Raises ``dns.message.ShortHeader`` if the message is less than 12 octets
     long.
 
@@ -803,6 +819,9 @@ def from_wire(wire, keyring=None, request_mac=b'', xfr=False, origin=None,
 
     Raises ``dns.message.BadTSIG`` if a TSIG record was not the last
     record of the additional data section.
+
+    Raises ``dns.message.Truncated`` if the TC flag is set and
+    *raise_on_truncation* is ``True``.
 
     Returns a ``dns.message.Message``.
     """
@@ -818,7 +837,17 @@ def from_wire(wire, keyring=None, request_mac=b'', xfr=False, origin=None,
 
     reader = _WireReader(wire, m, question_only, one_rr_per_rrset,
                          ignore_trailing)
-    reader.read()
+    try:
+        reader.read()
+    except dns.exception.FormError:
+        if m.flags & dns.flags.TC and raise_on_truncation:
+            raise Truncated(message=m)
+        else:
+            raise
+    # Reading a truncated message might not have any errors, so we
+    # have to do this check here too.
+    if m.flags & dns.flags.TC and raise_on_truncation:
+        raise Truncated(message=m)
 
     return m
 
@@ -835,9 +864,9 @@ class _TextReader(object):
     last_name: The most recently read name when building a message object.
     """
 
-    def __init__(self, text, message):
+    def __init__(self, text, message, idna_codec):
         self.message = message
-        self.tok = dns.tokenizer.Tokenizer(text)
+        self.tok = dns.tokenizer.Tokenizer(text, idna_codec=idna_codec)
         self.last_name = None
         self.zone_rdclass = dns.rdataclass.IN
         self.updating = False
@@ -893,7 +922,7 @@ class _TextReader(object):
 
         token = self.tok.get(want_leading=True)
         if not token.is_whitespace():
-            self.last_name = dns.name.from_text(token.value, None)
+            self.last_name = self.tok.as_name(token, None)
         name = self.last_name
         token = self.tok.get()
         if not token.is_identifier():
@@ -926,7 +955,7 @@ class _TextReader(object):
         # Name
         token = self.tok.get(want_leading=True)
         if not token.is_whitespace():
-            self.last_name = dns.name.from_text(token.value, None)
+            self.last_name = self.tok.as_name(token, None)
         name = self.last_name
         token = self.tok.get()
         if not token.is_identifier():
@@ -1002,10 +1031,18 @@ class _TextReader(object):
             line_method(section)
 
 
-def from_text(text):
+def from_text(text, idna_codec=None):
     """Convert the text format message into a message object.
 
-    *text*, a ``text``, the text format message.
+    The reader stops after reading the first blank line in the input to
+    facilitate reading multiple messages from a single file with
+    ``dns.message.from_file()``.
+
+    *text*, a ``str``, the text format message.
+
+    *idna_codec*, a ``dns.name.IDNACodec``, specifies the IDNA
+    encoder/decoder.  If ``None``, the default IDNA 2003 encoder/decoder
+    is used.
 
     Raises ``dns.message.UnknownHeaderField`` if a header is unknown.
 
@@ -1020,7 +1057,7 @@ def from_text(text):
 
     m = Message()
 
-    reader = _TextReader(text, m)
+    reader = _TextReader(text, m, idna_codec)
     reader.read()
 
     return m
@@ -1029,7 +1066,9 @@ def from_text(text):
 def from_file(f):
     """Read the next text format message from the specified file.
 
-    *f*, a ``file`` or ``text``.  If *f* is text, it is treated as the
+    Message blocks are separated by a single blank line.
+
+    *f*, a ``file`` or ``str``.  If *f* is text, it is treated as the
     pathname of a file to open.
 
     Raises ``dns.message.UnknownHeaderField`` if a header is unknown.
@@ -1039,26 +1078,15 @@ def from_file(f):
     Returns a ``dns.message.Message object``
     """
 
-    str_type = string_types
-    opts = 'rU'
-
-    if isinstance(f, str_type):
-        f = open(f, opts)
-        want_close = True
-    else:
-        want_close = False
-
-    try:
-        m = from_text(f)
-    finally:
-        if want_close:
-            f.close()
-    return m
+    with contextlib.ExitStack() as stack:
+        if isinstance(f, str):
+            f = stack.enter_context(open(f))
+        return from_text(f)
 
 
 def make_query(qname, rdtype, rdclass=dns.rdataclass.IN, use_edns=None,
                want_dnssec=False, ednsflags=None, payload=None,
-               request_payload=None, options=None):
+               request_payload=None, options=None, idna_codec=None):
     """Make a query message.
 
     The query name, type, and class may all be specified either
@@ -1067,11 +1095,11 @@ def make_query(qname, rdtype, rdclass=dns.rdataclass.IN, use_edns=None,
     The query will have a randomly chosen query id, and its DNS flags
     will be set to dns.flags.RD.
 
-    qname, a ``dns.name.Name`` or ``text``, the query name.
+    qname, a ``dns.name.Name`` or ``str``, the query name.
 
-    *rdtype*, an ``int`` or ``text``, the desired rdata type.
+    *rdtype*, an ``int`` or ``str``, the desired rdata type.
 
-    *rdclass*, an ``int`` or ``text``,  the desired rdata class; the default
+    *rdclass*, an ``int`` or ``str``,  the desired rdata class; the default
     is class IN.
 
     *use_edns*, an ``int``, ``bool`` or ``None``.  The EDNS level to use; the
@@ -1094,15 +1122,17 @@ def make_query(qname, rdtype, rdclass=dns.rdataclass.IN, use_edns=None,
     *options*, a list of ``dns.edns.Option`` objects or ``None``, the EDNS
     options.
 
+    *idna_codec*, a ``dns.name.IDNACodec``, specifies the IDNA
+    encoder/decoder.  If ``None``, the default IDNA 2003 encoder/decoder
+    is used.
+
     Returns a ``dns.message.Message``
     """
 
-    if isinstance(qname, string_types):
-        qname = dns.name.from_text(qname)
-    if isinstance(rdtype, string_types):
-        rdtype = dns.rdatatype.from_text(rdtype)
-    if isinstance(rdclass, string_types):
-        rdclass = dns.rdataclass.from_text(rdclass)
+    if isinstance(qname, str):
+        qname = dns.name.from_text(qname, idna_codec=idna_codec)
+    rdtype = dns.rdatatype.RdataType.make(rdtype)
+    rdclass = dns.rdataclass.RdataClass.make(rdclass)
     m = Message()
     m.flags |= dns.flags.RD
     m.find_rrset(m.question, qname, rdclass, rdtype, create=True,

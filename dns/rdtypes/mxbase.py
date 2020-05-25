@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -15,7 +17,7 @@
 
 """MX-like base classes."""
 
-from io import BytesIO
+import io
 import struct
 
 import dns.exception
@@ -25,29 +27,24 @@ import dns.name
 
 class MXBase(dns.rdata.Rdata):
 
-    """Base class for rdata that is like an MX record.
-
-    @ivar preference: the preference value
-    @type preference: int
-    @ivar exchange: the exchange name
-    @type exchange: dns.name.Name object"""
+    """Base class for rdata that is like an MX record."""
 
     __slots__ = ['preference', 'exchange']
 
     def __init__(self, rdclass, rdtype, preference, exchange):
-        super(MXBase, self).__init__(rdclass, rdtype)
-        self.preference = preference
-        self.exchange = exchange
+        super().__init__(rdclass, rdtype)
+        object.__setattr__(self, 'preference', preference)
+        object.__setattr__(self, 'exchange', exchange)
 
     def to_text(self, origin=None, relativize=True, **kw):
         exchange = self.exchange.choose_relativity(origin, relativize)
         return '%d %s' % (self.preference, exchange)
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
         preference = tok.get_uint16()
-        exchange = tok.get_name()
-        exchange = exchange.choose_relativity(origin, relativize)
+        exchange = tok.get_name(origin, relativize, relativize_to)
         tok.get_eol()
         return cls(rdclass, rdtype, preference, exchange)
 
@@ -73,9 +70,6 @@ class MXBase(dns.rdata.Rdata):
             exchange = exchange.relativize(origin)
         return cls(rdclass, rdtype, preference, exchange)
 
-    def choose_relativity(self, origin=None, relativize=True):
-        self.exchange = self.exchange.choose_relativity(origin, relativize)
-
 
 class UncompressedMX(MXBase):
 
@@ -87,7 +81,7 @@ class UncompressedMX(MXBase):
         super(UncompressedMX, self).to_wire(file, None, origin)
 
     def to_digestable(self, origin=None):
-        f = BytesIO()
+        f = io.BytesIO()
         self.to_wire(f, None, origin)
         return f.getvalue()
 

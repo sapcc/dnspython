@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2016 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -21,22 +23,20 @@ import dns.tokenizer
 
 class OPENPGPKEY(dns.rdata.Rdata):
 
-    """OPENPGPKEY record
+    """OPENPGPKEY record"""
 
-    @ivar key: the key
-    @type key: bytes
-    @see: RFC 7929
-    """
+    # see: RFC 7929
 
     def __init__(self, rdclass, rdtype, key):
-        super(OPENPGPKEY, self).__init__(rdclass, rdtype)
-        self.key = key
+        super().__init__(rdclass, rdtype)
+        object.__setattr__(self, 'key', key)
 
     def to_text(self, origin=None, relativize=True, **kw):
         return dns.rdata._base64ify(self.key)
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
         chunks = []
         while 1:
             t = tok.get().unescape()

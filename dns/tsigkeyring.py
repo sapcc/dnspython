@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -15,8 +17,6 @@
 
 """A place to store TSIG keys."""
 
-from dns._compat import maybe_decode, maybe_encode
-
 import base64
 
 import dns.name
@@ -30,7 +30,7 @@ def from_text(textring):
     keyring = {}
     for keytext in textring:
         keyname = dns.name.from_text(keytext)
-        secret = base64.decodestring(maybe_encode(textring[keytext]))
+        secret = base64.decodebytes(textring[keytext].encode())
         keyring[keyname] = secret
     return keyring
 
@@ -42,7 +42,8 @@ def to_text(keyring):
 
     textring = {}
     for keyname in keyring:
-        keytext = maybe_decode(keyname.to_text())
-        secret = maybe_decode(base64.encodestring(keyring[keyname]))
+        keytext = keyname.to_text()
+        # rstrip to get rid of the \n encoding adds
+        secret = base64.encodebytes(keyring[keyname]).decode().rstrip()
         textring[keytext] = secret
     return textring

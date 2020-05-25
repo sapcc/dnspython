@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2001-2017 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -15,55 +17,44 @@
 
 """DNS Result Codes."""
 
+import dns.enum
 import dns.exception
-from ._compat import long
 
-#: No error
-NOERROR = 0
-#: Form error
-FORMERR = 1
-#: Server failure
-SERVFAIL = 2
-#: Name does not exist ("Name Error" in RFC 1025 terminology).
-NXDOMAIN = 3
-#: Not implemented
-NOTIMP = 4
-#: Refused
-REFUSED = 5
-#: Name exists.
-YXDOMAIN = 6
-#: RRset exists.
-YXRRSET = 7
-#: RRset does not exist.
-NXRRSET = 8
-#: Not authoritative.
-NOTAUTH = 9
-#: Name not in zone.
-NOTZONE = 10
-#: Bad EDNS version.
-BADVERS = 16
+class Rcode(dns.enum.IntEnum):
+    #: No error
+    NOERROR = 0
+    #: Format error
+    FORMERR = 1
+    #: Server failure
+    SERVFAIL = 2
+    #: Name does not exist ("Name Error" in RFC 1025 terminology).
+    NXDOMAIN = 3
+    #: Not implemented
+    NOTIMP = 4
+    #: Refused
+    REFUSED = 5
+    #: Name exists.
+    YXDOMAIN = 6
+    #: RRset exists.
+    YXRRSET = 7
+    #: RRset does not exist.
+    NXRRSET = 8
+    #: Not authoritative.
+    NOTAUTH = 9
+    #: Name not in zone.
+    NOTZONE = 10
+    #: Bad EDNS version.
+    BADVERS = 16
 
-_by_text = {
-    'NOERROR': NOERROR,
-    'FORMERR': FORMERR,
-    'SERVFAIL': SERVFAIL,
-    'NXDOMAIN': NXDOMAIN,
-    'NOTIMP': NOTIMP,
-    'REFUSED': REFUSED,
-    'YXDOMAIN': YXDOMAIN,
-    'YXRRSET': YXRRSET,
-    'NXRRSET': NXRRSET,
-    'NOTAUTH': NOTAUTH,
-    'NOTZONE': NOTZONE,
-    'BADVERS': BADVERS
-}
+    @classmethod
+    def _maximum(cls):
+        return 4095
 
-# We construct the inverse mapping programmatically to ensure that we
-# cannot make any mistakes (e.g. omissions, cut-and-paste errors) that
-# would cause the mapping not to be a true inverse.
+    @classmethod
+    def _unknown_exception_class(cls):
+        return UnknownRcode
 
-_by_value = dict((y, x) for x, y in _by_text.items())
-
+globals().update(Rcode.__members__)
 
 class UnknownRcode(dns.exception.DNSException):
     """A DNS rcode is unknown."""
@@ -72,21 +63,14 @@ class UnknownRcode(dns.exception.DNSException):
 def from_text(text):
     """Convert text into an rcode.
 
-    *text*, a ``text``, the textual rcode or an integer in textual form.
+    *text*, a ``str``, the textual rcode or an integer in textual form.
 
     Raises ``dns.rcode.UnknownRcode`` if the rcode mnemonic is unknown.
 
     Returns an ``int``.
     """
 
-    if text.isdigit():
-        v = int(text)
-        if v >= 0 and v <= 4095:
-            return v
-    v = _by_text.get(text.upper())
-    if v is None:
-        raise UnknownRcode
-    return v
+    return Rcode.from_text(text)
 
 
 def from_flags(flags, ednsflags):
@@ -120,7 +104,7 @@ def to_flags(value):
     if value < 0 or value > 4095:
         raise ValueError('rcode must be >= 0 and <= 4095')
     v = value & 0xf
-    ev = long(value & 0xff0) << 20
+    ev = (value & 0xff0) << 20
     return (v, ev)
 
 
@@ -131,12 +115,7 @@ def to_text(value):
 
     Raises ``ValueError`` if rcode is < 0 or > 4095.
 
-    Returns a ``text``.
+    Returns a ``str``.
     """
 
-    if value < 0 or value > 4095:
-        raise ValueError('rcode must be >= 0 and <= 4095')
-    text = _by_value.get(value)
-    if text is None:
-        text = str(value)
-    return text
+    return Rcode.to_text(value)

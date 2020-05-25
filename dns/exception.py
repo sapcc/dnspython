@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2017 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -122,5 +124,5 @@ class TooBig(DNSException):
 
 class Timeout(DNSException):
     """The DNS operation timed out."""
-    supp_kwargs = set(['timeout'])
+    supp_kwargs = {'timeout'}
     fmt = "The DNS operation timed out after {timeout} seconds"

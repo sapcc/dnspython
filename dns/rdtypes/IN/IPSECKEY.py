@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2006, 2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -17,51 +19,42 @@ import struct
 import base64
 
 import dns.exception
-import dns.inet
+import dns.ipv4
+import dns.ipv6
 import dns.name
 
 
 class IPSECKEY(dns.rdata.Rdata):
 
-    """IPSECKEY record
+    """IPSECKEY record"""
 
-    @ivar precedence: the precedence for this key data
-    @type precedence: int
-    @ivar gateway_type: the gateway type
-    @type gateway_type: int
-    @ivar algorithm: the algorithm to use
-    @type algorithm: int
-    @ivar gateway: the public key
-    @type gateway: None, IPv4 address, IPV6 address, or domain name
-    @ivar key: the public key
-    @type key: string
-    @see: RFC 4025"""
+    # see: RFC 4025
 
     __slots__ = ['precedence', 'gateway_type', 'algorithm', 'gateway', 'key']
 
     def __init__(self, rdclass, rdtype, precedence, gateway_type, algorithm,
                  gateway, key):
-        super(IPSECKEY, self).__init__(rdclass, rdtype)
+        super().__init__(rdclass, rdtype)
         if gateway_type == 0:
             if gateway != '.' and gateway is not None:
                 raise SyntaxError('invalid gateway for gateway type 0')
             gateway = None
         elif gateway_type == 1:
             # check that it's OK
-            dns.inet.inet_pton(dns.inet.AF_INET, gateway)
+            dns.ipv4.inet_aton(gateway)
         elif gateway_type == 2:
             # check that it's OK
-            dns.inet.inet_pton(dns.inet.AF_INET6, gateway)
+            dns.ipv6.inet_aton(gateway)
         elif gateway_type == 3:
             pass
         else:
             raise SyntaxError(
                 'invalid IPSECKEY gateway type: %d' % gateway_type)
-        self.precedence = precedence
-        self.gateway_type = gateway_type
-        self.algorithm = algorithm
-        self.gateway = gateway
-        self.key = key
+        object.__setattr__(self, 'precedence', precedence)
+        object.__setattr__(self, 'gateway_type', gateway_type)
+        object.__setattr__(self, 'algorithm', algorithm)
+        object.__setattr__(self, 'gateway', gateway)
+        object.__setattr__(self, 'key', key)
 
     def to_text(self, origin=None, relativize=True, **kw):
         if self.gateway_type == 0:
@@ -79,12 +72,13 @@ class IPSECKEY(dns.rdata.Rdata):
                                    dns.rdata._base64ify(self.key))
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
         precedence = tok.get_uint8()
         gateway_type = tok.get_uint8()
         algorithm = tok.get_uint8()
         if gateway_type == 3:
-            gateway = tok.get_name().choose_relativity(origin, relativize)
+            gateway = tok.get_name(origin, relativize, relativize_to)
         else:
             gateway = tok.get_string()
         chunks = []
@@ -107,9 +101,9 @@ class IPSECKEY(dns.rdata.Rdata):
         if self.gateway_type == 0:
             pass
         elif self.gateway_type == 1:
-            file.write(dns.inet.inet_pton(dns.inet.AF_INET, self.gateway))
+            file.write(dns.ipv4.inet_aton(self.gateway))
         elif self.gateway_type == 2:
-            file.write(dns.inet.inet_pton(dns.inet.AF_INET6, self.gateway))
+            file.write(dns.ipv6.inet_aton(self.gateway))
         elif self.gateway_type == 3:
             self.gateway.to_wire(file, None, origin)
         else:
@@ -127,13 +121,11 @@ class IPSECKEY(dns.rdata.Rdata):
         if gateway_type == 0:
             gateway = None
         elif gateway_type == 1:
-            gateway = dns.inet.inet_ntop(dns.inet.AF_INET,
-                                         wire[current: current + 4])
+            gateway = dns.ipv4.inet_ntoa(wire[current: current + 4])
             current += 4
             rdlen -= 4
         elif gateway_type == 2:
-            gateway = dns.inet.inet_ntop(dns.inet.AF_INET6,
-                                         wire[current: current + 16])
+            gateway = dns.ipv6.inet_ntoa(wire[current: current + 16])
             current += 16
             rdlen -= 16
         elif gateway_type == 3:
@@ -144,5 +136,7 @@ class IPSECKEY(dns.rdata.Rdata):
         else:
             raise dns.exception.FormError('invalid IPSECKEY gateway type')
         key = wire[current: current + rdlen].unwrap()
+        if origin is not None and gateway_type == 3:
+            gateway = gateway.relativize(origin)
         return cls(rdclass, rdtype, header[0], gateway_type, header[2],
                    gateway, key)

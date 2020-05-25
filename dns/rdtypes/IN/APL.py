@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2017 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -18,25 +20,14 @@ import codecs
 import struct
 
 import dns.exception
-import dns.inet
+import dns.ipv4
+import dns.ipv6
 import dns.rdata
 import dns.tokenizer
-from dns._compat import xrange, maybe_chr
-
 
 class APLItem(object):
 
-    """An APL list item.
-
-    @ivar family: the address family (IANA address family registry)
-    @type family: int
-    @ivar negation: is this item negated?
-    @type negation: bool
-    @ivar address: the address
-    @type address: string
-    @ivar prefix: the prefix length
-    @type prefix: int
-    """
+    """An APL list item."""
 
     __slots__ = ['family', 'negation', 'address', 'prefix']
 
@@ -54,17 +45,17 @@ class APLItem(object):
 
     def to_wire(self, file):
         if self.family == 1:
-            address = dns.inet.inet_pton(dns.inet.AF_INET, self.address)
+            address = dns.ipv4.inet_aton(self.address)
         elif self.family == 2:
-            address = dns.inet.inet_pton(dns.inet.AF_INET6, self.address)
+            address = dns.ipv6.inet_aton(self.address)
         else:
             address = binascii.unhexlify(self.address)
         #
         # Truncate least significant zero bytes.
         #
         last = 0
-        for i in xrange(len(address) - 1, -1, -1):
-            if address[i] != maybe_chr(0):
+        for i in range(len(address) - 1, -1, -1):
+            if address[i] != 0:
                 last = i + 1
                 break
         address = address[0: last]
@@ -79,25 +70,24 @@ class APLItem(object):
 
 class APL(dns.rdata.Rdata):
 
-    """APL record.
+    """APL record."""
 
-    @ivar items: a list of APL items
-    @type items: list of APL_Item
-    @see: RFC 3123"""
+    # see: RFC 3123
 
     __slots__ = ['items']
 
     def __init__(self, rdclass, rdtype, items):
-        super(APL, self).__init__(rdclass, rdtype)
-        self.items = items
+        super().__init__(rdclass, rdtype)
+        object.__setattr__(self, 'items', dns.rdata._constify(items))
 
     def to_text(self, origin=None, relativize=True, **kw):
         return ' '.join(map(str, self.items))
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
         items = []
-        while 1:
+        while True:
             token = tok.get().unescape()
             if token.is_eol_or_eof():
                 break
@@ -145,11 +135,11 @@ class APL(dns.rdata.Rdata):
             if header[0] == 1:
                 if l < 4:
                     address += b'\x00' * (4 - l)
-                address = dns.inet.inet_ntop(dns.inet.AF_INET, address)
+                address = dns.ipv4.inet_ntoa(address)
             elif header[0] == 2:
                 if l < 16:
                     address += b'\x00' * (16 - l)
-                address = dns.inet.inet_ntop(dns.inet.AF_INET6, address)
+                address = dns.ipv6.inet_ntoa(address)
             else:
                 #
                 # This isn't really right according to the RFC, but it

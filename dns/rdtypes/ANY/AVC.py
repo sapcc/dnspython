@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2016 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -18,6 +20,6 @@ import dns.rdtypes.txtbase
 
 class AVC(dns.rdtypes.txtbase.TXTBase):
 
-    """AVC record
+    """AVC record"""
 
-    @see: U{http://www.iana.org/assignments/dns-parameters/AVC/avc-completed-template}"""
+    # See: IANA dns parameters for AVC

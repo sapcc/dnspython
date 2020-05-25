@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -13,10 +15,7 @@
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-try:
-    import unittest2 as unittest
-except ImportError:
-    import unittest
+import unittest
 
 import dns.name
 import dns.namedict
@@ -36,70 +35,90 @@ class NameTestCase(unittest.TestCase):
         self.rndict[n2] = 2
 
     def testDepth(self):
-        self.failUnless(self.ndict.max_depth == 3)
+        self.assertEqual(self.ndict.max_depth, 3)
 
     def testLookup1(self):
         k = dns.name.from_text('foo.bar.')
-        self.failUnless(self.ndict[k] == 1)
+        self.assertEqual(self.ndict[k], 1)
 
     def testLookup2(self):
         k = dns.name.from_text('foo.bar.')
-        self.failUnless(self.ndict.get_deepest_match(k)[1] == 1)
+        self.assertEqual(self.ndict.get_deepest_match(k)[1], 1)
 
     def testLookup3(self):
         k = dns.name.from_text('a.b.c.foo.bar.')
-        self.failUnless(self.ndict.get_deepest_match(k)[1] == 1)
+        self.assertEqual(self.ndict.get_deepest_match(k)[1], 1)
 
     def testLookup4(self):
         k = dns.name.from_text('a.b.c.bar.')
-        self.failUnless(self.ndict.get_deepest_match(k)[1] == 2)
+        self.assertEqual(self.ndict.get_deepest_match(k)[1], 2)
 
     def testLookup5(self):
         def bad():
             n = dns.name.from_text('a.b.c.')
             self.ndict.get_deepest_match(n)
-        self.failUnlessRaises(KeyError, bad)
+        self.assertRaises(KeyError, bad)
 
     def testLookup6(self):
         def bad():
             self.ndict.get_deepest_match(dns.name.empty)
-        self.failUnlessRaises(KeyError, bad)
+        self.assertRaises(KeyError, bad)
 
     def testLookup7(self):
         self.ndict[dns.name.empty] = 100
         n = dns.name.from_text('a.b.c.')
         v = self.ndict.get_deepest_match(n)[1]
-        self.failUnless(v == 100)
+        self.assertEqual(v, 100)
 
     def testLookup8(self):
         def bad():
             self.ndict['foo'] = 100
-        self.failUnlessRaises(ValueError, bad)
+        self.assertRaises(ValueError, bad)
 
     def testRelDepth(self):
-        self.failUnless(self.rndict.max_depth == 2)
+        self.assertEqual(self.rndict.max_depth, 2)
 
     def testRelLookup1(self):
         k = dns.name.from_text('foo.bar', None)
-        self.failUnless(self.rndict[k] == 1)
+        self.assertEqual(self.rndict[k], 1)
 
     def testRelLookup2(self):
         k = dns.name.from_text('foo.bar', None)
-        self.failUnless(self.rndict.get_deepest_match(k)[1] == 1)
+        self.assertEqual(self.rndict.get_deepest_match(k)[1], 1)
 
     def testRelLookup3(self):
         k = dns.name.from_text('a.b.c.foo.bar', None)
-        self.failUnless(self.rndict.get_deepest_match(k)[1] == 1)
+        self.assertEqual(self.rndict.get_deepest_match(k)[1], 1)
 
     def testRelLookup4(self):
         k = dns.name.from_text('a.b.c.bar', None)
-        self.failUnless(self.rndict.get_deepest_match(k)[1] == 2)
+        self.assertEqual(self.rndict.get_deepest_match(k)[1], 2)
 
     def testRelLookup7(self):
         self.rndict[dns.name.empty] = 100
         n = dns.name.from_text('a.b.c', None)
         v = self.rndict.get_deepest_match(n)[1]
-        self.failUnless(v == 100)
+        self.assertEqual(v, 100)
+
+    def test_max_depth_increases(self):
+        n = dns.name.from_text('a.foo.bar.')
+        self.assertEqual(self.ndict.max_depth, 3)
+        self.ndict[n] = 1
+        self.assertEqual(self.ndict.max_depth, 4)
+
+    def test_delete_no_max_depth_change(self):
+        self.assertEqual(self.ndict.max_depth, 3)
+        n = dns.name.from_text('bar.')
+        del self.ndict[n]
+        self.assertEqual(self.ndict.max_depth, 3)
+        self.assertEqual(self.ndict.get(n), None)
+
+    def test_delete_max_depth_changes(self):
+        self.assertEqual(self.ndict.max_depth, 3)
+        n = dns.name.from_text('foo.bar.')
+        del self.ndict[n]
+        self.assertEqual(self.ndict.max_depth, 2)
+        self.assertEqual(self.ndict.get(n), None)
 
 if __name__ == '__main__':
     unittest.main()

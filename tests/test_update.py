@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -13,15 +15,13 @@
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-try:
-    import unittest2 as unittest
-except ImportError:
-    import unittest
+import unittest
 import binascii
 
 import dns.update
 import dns.rdata
 import dns.rdataset
+import dns.tsigkeyring
 
 goodhex = '0001 2800 0001 0005 0007 0000' \
           '076578616d706c6500 0006 0001' \
@@ -63,7 +63,7 @@ blaz2 ANY ANY
 
 class UpdateTestCase(unittest.TestCase):
 
-    def test_to_wire1(self):
+    def test_to_wire1(self): # type: () -> None
         update = dns.update.Update('example')
         update.id = 1
         update.present('foo')
@@ -76,9 +76,9 @@ class UpdateTestCase(unittest.TestCase):
         update.delete('bar', 'a', '10.0.0.4')
         update.delete('blaz', 'a')
         update.delete('blaz2')
-        self.failUnless(update.to_wire() == goodwire)
+        self.assertEqual(update.to_wire(), goodwire)
 
-    def test_to_wire2(self):
+    def test_to_wire2(self): # type: () -> None
         update = dns.update.Update('example')
         update.id = 1
         update.present('foo')
@@ -91,9 +91,9 @@ class UpdateTestCase(unittest.TestCase):
         update.delete('bar', 'a', '10.0.0.4')
         update.delete('blaz', 'a')
         update.delete('blaz2')
-        self.failUnless(update.to_wire() == goodwire)
+        self.assertEqual(update.to_wire(), goodwire)
 
-    def test_to_wire3(self):
+    def test_to_wire3(self): # type: () -> None
         update = dns.update.Update('example')
         update.id = 1
         update.present('foo')
@@ -106,13 +106,23 @@ class UpdateTestCase(unittest.TestCase):
         update.delete('bar', 'a', '10.0.0.4')
         update.delete('blaz', 'a')
         update.delete('blaz2')
-        self.failUnless(update.to_wire() == goodwire)
+        self.assertEqual(update.to_wire(), goodwire)
 
-    def test_from_text1(self):
+    def test_from_text1(self): # type: () -> None
         update = dns.message.from_text(update_text)
         w = update.to_wire(origin=dns.name.from_text('example'),
                            want_shuffle=False)
-        self.failUnless(w == goodwire)
+        self.assertEqual(w, goodwire)
+
+    def test_TSIG(self):
+        keyring = dns.tsigkeyring.from_text({
+            'keyname.' : 'NjHwPsMKjdN++dOfE5iAiQ=='
+        })
+        update = dns.update.Update('example.', keyring=keyring)
+        update.replace('host.example.', 300, 'A', '1.2.3.4')
+        wire = update.to_wire()
+        update2 = dns.message.from_wire(wire, keyring)
+        self.assertEqual(update, update2)
 
 if __name__ == '__main__':
     unittest.main()

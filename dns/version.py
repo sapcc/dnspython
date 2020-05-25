@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2017 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -16,9 +18,9 @@
 """dnspython release version information."""
 
 #: MAJOR
-MAJOR = 1
+MAJOR = 2
 #: MINOR
-MINOR = 16
+MINOR = 0
 #: MICRO
 MICRO = 0
 #: RELEASELEVEL

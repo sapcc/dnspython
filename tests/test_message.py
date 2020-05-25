@@ -1,3 +1,6 @@
+# -*- coding: utf-8
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -13,10 +16,7 @@
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-try:
-    import unittest2 as unittest
-except ImportError:
-    import unittest
+import unittest
 import binascii
 
 import dns.exception
@@ -25,7 +25,7 @@ import dns.message
 import dns.name
 import dns.rdataclass
 import dns.rdatatype
-from dns._compat import xrange
+import dns.rrset
 
 query_text = """id 1234
 opcode QUERY
@@ -93,33 +93,43 @@ goodhex3 = b'04d2010f0001000000000001047777777709646e73707974686f6e' \
 
 goodwire3 = binascii.unhexlify(goodhex3)
 
+idna_text = """id 1234
+opcode QUERY
+rcode NOERROR
+flags QR AA RD
+;QUESTION
+Königsgäßchen. IN NS
+;ANSWER
+Königsgäßchen. 3600 IN NS Königsgäßchen.
+"""
+
 class MessageTestCase(unittest.TestCase):
 
     def test_comparison_eq1(self):
         q1 = dns.message.from_text(query_text)
         q2 = dns.message.from_text(query_text)
-        self.failUnless(q1 == q2)
+        self.assertEqual(q1, q2)
 
     def test_comparison_ne1(self):
         q1 = dns.message.from_text(query_text)
         q2 = dns.message.from_text(query_text)
         q2.id = 10
-        self.failUnless(q1 != q2)
+        self.assertNotEqual(q1, q2)
 
     def test_comparison_ne2(self):
         q1 = dns.message.from_text(query_text)
         q2 = dns.message.from_text(query_text)
         q2.question = []
-        self.failUnless(q1 != q2)
+        self.assertNotEqual(q1, q2)
 
     def test_comparison_ne3(self):
         q1 = dns.message.from_text(query_text)
-        self.failUnless(q1 != 1)
+        self.assertNotEqual(q1, 1)
 
     def test_EDNS_to_wire1(self):
         q = dns.message.from_text(query_text)
         w = q.to_wire()
-        self.failUnless(w == goodwire)
+        self.assertEqual(w, goodwire)
 
     def test_EDNS_from_wire1(self):
         m = dns.message.from_wire(goodwire)
@@ -128,79 +138,79 @@ class MessageTestCase(unittest.TestCase):
     def test_EDNS_to_wire2(self):
         q = dns.message.from_text(query_text_2)
         w = q.to_wire()
-        self.failUnless(w == goodwire3)
+        self.assertEqual(w, goodwire3)
 
     def test_EDNS_from_wire2(self):
         m = dns.message.from_wire(goodwire3)
-        self.failUnless(str(m) == query_text_2)
+        self.assertEqual(str(m), query_text_2)
 
     def test_TooBig(self):
         def bad():
             q = dns.message.from_text(query_text)
-            for i in xrange(0, 25):
+            for i in range(0, 25):
                 rrset = dns.rrset.from_text('foo%d.' % i, 3600,
                                             dns.rdataclass.IN,
                                             dns.rdatatype.A,
                                             '10.0.0.%d' % i)
                 q.additional.append(rrset)
             q.to_wire(max_size=512)
-        self.failUnlessRaises(dns.exception.TooBig, bad)
+        self.assertRaises(dns.exception.TooBig, bad)
 
     def test_answer1(self):
         a = dns.message.from_text(answer_text)
         wire = a.to_wire(want_shuffle=False)
-        self.failUnless(wire == goodwire2)
+        self.assertEqual(wire, goodwire2)
 
     def test_TrailingJunk(self):
         def bad():
             badwire = goodwire + b'\x00'
             dns.message.from_wire(badwire)
-        self.failUnlessRaises(dns.message.TrailingJunk, bad)
+        self.assertRaises(dns.message.TrailingJunk, bad)
 
     def test_ShortHeader(self):
         def bad():
             badwire = b'\x00' * 11
             dns.message.from_wire(badwire)
-        self.failUnlessRaises(dns.message.ShortHeader, bad)
+        self.assertRaises(dns.message.ShortHeader, bad)
 
     def test_RespondingToResponse(self):
         def bad():
             q = dns.message.make_query('foo', 'A')
             r1 = dns.message.make_response(q)
             dns.message.make_response(r1)
-        self.failUnlessRaises(dns.exception.FormError, bad)
+        self.assertRaises(dns.exception.FormError, bad)
 
     def test_ExtendedRcodeSetting(self):
         m = dns.message.make_query('foo', 'A')
         m.set_rcode(4095)
-        self.failUnless(m.rcode() == 4095)
+        self.assertEqual(m.rcode(), 4095)
         m.set_rcode(2)
-        self.failUnless(m.rcode() == 2)
+        self.assertEqual(m.rcode(), 2)
 
     def test_EDNSVersionCoherence(self):
         m = dns.message.make_query('foo', 'A')
         m.use_edns(1)
-        self.failUnless((m.ednsflags >> 16) & 0xFF == 1)
+        self.assertEqual((m.ednsflags >> 16) & 0xFF, 1)
 
     def test_SettingNoEDNSOptionsImpliesNoEDNS(self):
         m = dns.message.make_query('foo', 'A')
-        self.failUnless(m.edns == -1)
+        self.assertEqual(m.edns, -1)
 
     def test_SettingEDNSFlagsImpliesEDNS(self):
         m = dns.message.make_query('foo', 'A', ednsflags=dns.flags.DO)
-        self.failUnless(m.edns == 0)
+        self.assertEqual(m.edns, 0)
 
     def test_SettingEDNSPayloadImpliesEDNS(self):
         m = dns.message.make_query('foo', 'A', payload=4096)
-        self.failUnless(m.edns == 0)
+        self.assertEqual(m.edns, 0)
 
     def test_SettingEDNSRequestPayloadImpliesEDNS(self):
         m = dns.message.make_query('foo', 'A', request_payload=4096)
-        self.failUnless(m.edns == 0)
+        self.assertEqual(m.edns, 0)
 
     def test_SettingOptionsImpliesEDNS(self):
         m = dns.message.make_query('foo', 'A', options=[])
-        self.failUnless(m.edns == 0)
+        self.assertEqual(m.edns, 0)
 
     def test_FindRRset(self):
         a = dns.message.from_text(answer_text)
@@ -208,7 +218,39 @@ class MessageTestCase(unittest.TestCase):
         rrs1 = a.find_rrset(a.answer, n, dns.rdataclass.IN, dns.rdatatype.SOA)
         rrs2 = a.find_rrset(dns.message.ANSWER, n, dns.rdataclass.IN,
                             dns.rdatatype.SOA)
-        self.failUnless(rrs1 == rrs2)
+        self.assertEqual(rrs1, rrs2)
+
+    def test_CleanTruncated(self):
+        def bad():
+            a = dns.message.from_text(answer_text)
+            a.flags |= dns.flags.TC
+            wire = a.to_wire(want_shuffle=False)
+            dns.message.from_wire(wire, raise_on_truncation=True)
+        self.assertRaises(dns.message.Truncated, bad)
+
+    def test_MessyTruncated(self):
+        def bad():
+            a = dns.message.from_text(answer_text)
+            a.flags |= dns.flags.TC
+            wire = a.to_wire(want_shuffle=False)
+            dns.message.from_wire(wire[:-3], raise_on_truncation=True)
+        self.assertRaises(dns.message.Truncated, bad)
+
+    def test_IDNA_2003(self):
+        a = dns.message.from_text(idna_text, idna_codec=dns.name.IDNA_2003)
+        rrs = dns.rrset.from_text_list('xn--knigsgsschen-lcb0w.', 30,
+                                       'in', 'ns',
+                                       ['xn--knigsgsschen-lcb0w.'],
+                                       idna_codec=dns.name.IDNA_2003)
+        self.assertEqual(a.answer[0], rrs)
+
+    def test_IDNA_2008(self):
+        a = dns.message.from_text(idna_text, idna_codec=dns.name.IDNA_2008)
+        rrs = dns.rrset.from_text_list('xn--knigsgchen-b4a3dun.', 30,
+                                       'in', 'ns',
+                                       ['xn--knigsgchen-b4a3dun.'],
+                                       idna_codec=dns.name.IDNA_2008)
+        self.assertEqual(a.answer[0], rrs)
 
 if __name__ == '__main__':
     unittest.main()

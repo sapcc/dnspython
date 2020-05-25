@@ -1,4 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+#
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
 #
 # Copyright (C) 2003-2007, 2009-2011 Nominum, Inc.
 #
@@ -18,7 +20,17 @@
 import sys
 from setuptools import setup
 
-version = '1.16.0'
+version = '2.0.0'
+
+try:
+    sys.argv.remove("--cython-compile")
+except ValueError:
+    compile_cython = False
+else:
+    compile_cython = True
+    from Cython.Build import cythonize
+    ext_modules = cythonize(['dns/*.py', 'dns/rdtypes/*.py', 'dns/rdtypes/*/*.py'],
+                            language_level='3')
 
 kwargs = {
     'name' : 'dnspython',
@@ -35,11 +47,12 @@ class, and return an answer set.  The low level classes allow
 direct manipulation of DNS zones, messages, names, and records.""",
     'author' : 'Bob Halley',
     'author_email' : 'halley@dnspython.org',
-    'license' : 'BSD-like',
+    'license' : 'ISC',
     'url' : 'http://www.dnspython.org',
-    'packages' : ['dns', 'dns.rdtypes', 'dns.rdtypes.IN', 'dns.rdtypes.ANY'],
+    'packages' : ['dns', 'dns.rdtypes', 'dns.rdtypes.IN', 'dns.rdtypes.ANY', 'dns.rdtypes.CH'],
+    'package_data' : {'dns': ['py.typed']},
     'download_url' : \
-    'http://www.dnspython.org/kits/%s/dnspython-%s.tar.gz' % (version, version),
+    'http://www.dnspython.org/kits/{}/dnspython-{}.tar.gz'.format(version, version),
     'classifiers' : [
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
@@ -50,20 +63,22 @@ direct manipulation of DNS zones, messages, names, and records.""",
         "Programming Language :: Python",
         "Topic :: Internet :: Name Service (DNS)",
         "Topic :: Software Development :: Libraries :: Python Modules",
-        "Programming Language :: Python :: 2",
-        "Programming Language :: Python :: 2.6",
-        "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.3",
-        "Programming Language :: Python :: 3.4",
-        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
         ],
+    'python_requires': '>=3.6',
     'test_suite': 'tests',
     'provides': ['dns'],
     'extras_require': {
+        'DOH': ['requests', 'requests-toolbelt'],
         'IDNA': ['idna>=2.1'],
-        'DNSSEC': ['pycrypto>=2.6.1', 'ecdsa>=0.13'],
+        'DNSSEC': ['cryptography>=2.6'],
+        'trio': ['trio>=0.14.0'],
         },
+    'ext_modules': ext_modules if compile_cython else None,
+    'zip_safe': False if compile_cython else None,
     }
 
 setup(**kwargs)

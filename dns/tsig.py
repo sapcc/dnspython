@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2001-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -15,14 +17,13 @@
 
 """DNS TSIG support."""
 
+import hashlib
 import hmac
 import struct
 
 import dns.exception
-import dns.hash
 import dns.rdataclass
 import dns.name
-from ._compat import long, string_types, text_type
 
 class BadTime(dns.exception.DNSException):
 
@@ -68,15 +69,15 @@ HMAC_SHA384 = dns.name.from_text("hmac-sha384")
 HMAC_SHA512 = dns.name.from_text("hmac-sha512")
 
 _hashes = {
-    HMAC_SHA224: 'SHA224',
-    HMAC_SHA256: 'SHA256',
-    HMAC_SHA384: 'SHA384',
-    HMAC_SHA512: 'SHA512',
-    HMAC_SHA1: 'SHA1',
-    HMAC_MD5: 'MD5',
+    HMAC_SHA224: hashlib.sha224,
+    HMAC_SHA256: hashlib.sha256,
+    HMAC_SHA384: hashlib.sha384,
+    HMAC_SHA512: hashlib.sha512,
+    HMAC_SHA1: hashlib.sha1,
+    HMAC_MD5: hashlib.md5,
 }
 
-default_algorithm = HMAC_MD5
+default_algorithm = HMAC_SHA256
 
 BADSIG = 16
 BADKEY = 17
@@ -95,7 +96,7 @@ def sign(wire, keyname, secret, time, fudge, original_id, error,
     @raises NotImplementedError: I{algorithm} is not supported
     """
 
-    if isinstance(other_data, text_type):
+    if isinstance(other_data, str):
         other_data = other_data.encode()
     (algorithm_name, digestmod) = get_algorithm(algorithm)
     if first:
@@ -111,9 +112,8 @@ def sign(wire, keyname, secret, time, fudge, original_id, error,
         ctx.update(keyname.to_digestable())
         ctx.update(struct.pack('!H', dns.rdataclass.ANY))
         ctx.update(struct.pack('!I', 0))
-    long_time = time + long(0)
-    upper_time = (long_time >> 32) & long(0xffff)
-    lower_time = long_time & long(0xffffffff)
+    upper_time = (time >> 32) & 0xffff
+    lower_time = time & 0xffffffff
     time_mac = struct.pack('!HIH', upper_time, lower_time, fudge)
     pre_mac = algorithm_name + time_mac
     ol = len(other_data)
@@ -165,7 +165,7 @@ def validate(wire, keyname, secret, now, request_mac, tsig_start, tsig_rdata,
     current = current + used
     (upper_time, lower_time, fudge, mac_size) = \
         struct.unpack("!HIHH", wire[current:current + 10])
-    time = ((upper_time + long(0)) << 32) + (lower_time + long(0))
+    time = (upper_time << 32) + lower_time
     current += 10
     mac = wire[current:current + mac_size]
     current += mac_size
@@ -207,11 +207,11 @@ def get_algorithm(algorithm):
     @raises NotImplementedError: I{algorithm} is not supported
     """
 
-    if isinstance(algorithm, string_types):
+    if isinstance(algorithm, str):
         algorithm = dns.name.from_text(algorithm)
 
     try:
-        return (algorithm.to_digestable(), dns.hash.hashes[_hashes[algorithm]])
+        return (algorithm.to_digestable(), _hashes[algorithm])
     except KeyError:
         raise NotImplementedError("TSIG algorithm " + str(algorithm) +
                                   " is not supported")

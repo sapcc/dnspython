@@ -1,3 +1,5 @@
+# Copyright (C) Dnspython Contributors, see LICENSE for text of ISC license
+
 # Copyright (C) 2003-2007, 2009-2011 Nominum, Inc.
 #
 # Permission to use, copy, modify, and distribute this software and its
@@ -22,26 +24,18 @@ import dns.name
 
 class SRV(dns.rdata.Rdata):
 
-    """SRV record
+    """SRV record"""
 
-    @ivar priority: the priority
-    @type priority: int
-    @ivar weight: the weight
-    @type weight: int
-    @ivar port: the port of the service
-    @type port: int
-    @ivar target: the target host
-    @type target: dns.name.Name object
-    @see: RFC 2782"""
+    # see: RFC 2782
 
     __slots__ = ['priority', 'weight', 'port', 'target']
 
     def __init__(self, rdclass, rdtype, priority, weight, port, target):
-        super(SRV, self).__init__(rdclass, rdtype)
-        self.priority = priority
-        self.weight = weight
-        self.port = port
-        self.target = target
+        super().__init__(rdclass, rdtype)
+        object.__setattr__(self, 'priority', priority)
+        object.__setattr__(self, 'weight', weight)
+        object.__setattr__(self, 'port', port)
+        object.__setattr__(self, 'target', target)
 
     def to_text(self, origin=None, relativize=True, **kw):
         target = self.target.choose_relativity(origin, relativize)
@@ -49,12 +43,12 @@ class SRV(dns.rdata.Rdata):
                                 target)
 
     @classmethod
-    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True):
+    def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
+                  relativize_to=None):
         priority = tok.get_uint16()
         weight = tok.get_uint16()
         port = tok.get_uint16()
-        target = tok.get_name(None)
-        target = target.choose_relativity(origin, relativize)
+        target = tok.get_name(origin, relativize, relativize_to)
         tok.get_eol()
         return cls(rdclass, rdtype, priority, weight, port, target)
 
@@ -76,6 +70,3 @@ class SRV(dns.rdata.Rdata):
         if origin is not None:
             target = target.relativize(origin)
         return cls(rdclass, rdtype, priority, weight, port, target)
-
-    def choose_relativity(self, origin=None, relativize=True):
-        self.target = self.target.choose_relativity(origin, relativize)
