@@ -14,3 +14,6 @@ dnspython.egg-info/
 .python-version
 poetry.lock
 htmlcov
+coverage.xml
+.dir-locals.el
+.vscode/

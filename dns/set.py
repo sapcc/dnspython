@@ -21,9 +21,9 @@ import sys
 if sys.version_info >= (3, 7):
     odict = dict
 else:
-    from collections import OrderedDict as odict
+    from collections import OrderedDict as odict  # pragma: no cover
 
-class Set(object):
+class Set:
 
     """A simple set class.
 
@@ -84,9 +84,13 @@ class Set(object):
         subclasses.
         """
 
-        cls = self.__class__
+        if hasattr(self, '_clone_class'):
+            cls = self._clone_class
+        else:
+            cls = self.__class__
         obj = cls.__new__(cls)
-        obj.items = self.items.copy()
+        obj.items = odict()
+        obj.items.update(self.items)
         return obj
 
     def __copy__(self):

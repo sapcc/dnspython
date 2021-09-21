@@ -18,32 +18,42 @@
 """EDNS Options"""
 
 import math
+import socket
 import struct
 
+import dns.enum
 import dns.inet
+import dns.rdata
 
-#: NSID
-NSID = 3
-#: DAU
-DAU = 5
-#: DHU
-DHU = 6
-#: N3U
-N3U = 7
-#: ECS (client-subnet)
-ECS = 8
-#: EXPIRE
-EXPIRE = 9
-#: COOKIE
-COOKIE = 10
-#: KEEPALIVE
-KEEPALIVE = 11
-#: PADDING
-PADDING = 12
-#: CHAIN
-CHAIN = 13
 
-class Option(object):
+class OptionType(dns.enum.IntEnum):
+    #: NSID
+    NSID = 3
+    #: DAU
+    DAU = 5
+    #: DHU
+    DHU = 6
+    #: N3U
+    N3U = 7
+    #: ECS (client-subnet)
+    ECS = 8
+    #: EXPIRE
+    EXPIRE = 9
+    #: COOKIE
+    COOKIE = 10
+    #: KEEPALIVE
+    KEEPALIVE = 11
+    #: PADDING
+    PADDING = 12
+    #: CHAIN
+    CHAIN = 13
+
+    @classmethod
+    def _maximum(cls):
+        return 65535
+
+
+class Option:
 
     """Base class for all EDNS option types."""
 
@@ -52,37 +62,41 @@ class Option(object):
 
         *otype*, an ``int``, is the option type.
         """
-        self.otype = otype
+        self.otype = OptionType.make(otype)
 
-    def to_wire(self, file):
+    def to_wire(self, file=None):
         """Convert an option to wire format.
+
+        Returns a ``bytes`` or ``None``.
+
         """
-        raise NotImplementedError
+        raise NotImplementedError  # pragma: no cover
 
     @classmethod
-    def from_wire(cls, otype, wire, current, olen):
+    def from_wire_parser(cls, otype, parser):
         """Build an EDNS option object from wire format.
 
         *otype*, an ``int``, is the option type.
 
-        *wire*, a ``bytes``, is the wire-format message.
-
-        *current*, an ``int``, is the offset in *wire* of the beginning
-        of the rdata.
-
-        *olen*, an ``int``, is the length of the wire-format option data
+        *parser*, a ``dns.wire.Parser``, the parser, which should be
+        restructed to the option length.
 
         Returns a ``dns.edns.Option``.
         """
-
-        raise NotImplementedError
+        raise NotImplementedError  # pragma: no cover
 
     def _cmp(self, other):
         """Compare an EDNS option with another option of the same type.
 
         Returns < 0 if < *other*, 0 if == *other*, and > 0 if > *other*.
         """
-        raise NotImplementedError
+        wire = self.to_wire()
+        owire = other.to_wire()
+        if wire == owire:
+            return 0
+        if wire > owire:
+            return 1
+        return -1
 
     def __eq__(self, other):
         if not isinstance(other, Option):
@@ -93,9 +107,9 @@ class Option(object):
 
     def __ne__(self, other):
         if not isinstance(other, Option):
-            return False
+            return True
         if self.otype != other.otype:
-            return False
+            return True
         return self._cmp(other) != 0
 
     def __lt__(self, other):
@@ -122,6 +136,9 @@ class Option(object):
             return NotImplemented
         return self._cmp(other) > 0
 
+    def __str__(self):
+        return self.to_text()
+
 
 class GenericOption(Option):
 
@@ -132,28 +149,22 @@ class GenericOption(Option):
     """
 
     def __init__(self, otype, data):
-        super(GenericOption, self).__init__(otype)
-        self.data = data
+        super().__init__(otype)
+        self.data = dns.rdata.Rdata._as_bytes(data, True)
 
-    def to_wire(self, file):
-        file.write(self.data)
+    def to_wire(self, file=None):
+        if file:
+            file.write(self.data)
+        else:
+            return self.data
 
     def to_text(self):
         return "Generic %d" % self.otype
 
     @classmethod
-    def from_wire(cls, otype, wire, current, olen):
-        return cls(otype, wire[current: current + olen])
+    def from_wire_parser(cls, otype, parser):
+        return cls(otype, parser.get_remaining())
 
-    def _cmp(self, other):
-        if self.data == other.data:
-            return 0
-        if self.data > other.data:
-            return 1
-        return -1
-
-    def __str__(self):
-        return self.to_text()
 
 class ECSOption(Option):
     """EDNS Client Subnet (ECS, RFC7871)"""
@@ -169,19 +180,25 @@ class ECSOption(Option):
         must be 0 in queries, and should be set in responses.
         """
 
-        super(ECSOption, self).__init__(ECS)
+        super().__init__(OptionType.ECS)
         af = dns.inet.af_for_address(address)
 
-        if af == dns.inet.AF_INET6:
+        if af == socket.AF_INET6:
             self.family = 2
             if srclen is None:
                 srclen = 56
-        elif af == dns.inet.AF_INET:
+            address = dns.rdata.Rdata._as_ipv6_address(address)
+            srclen = dns.rdata.Rdata._as_int(srclen, 0, 128)
+            scopelen = dns.rdata.Rdata._as_int(scopelen, 0, 128)
+        elif af == socket.AF_INET:
             self.family = 1
             if srclen is None:
                 srclen = 24
-        else:
-            raise ValueError('Bad ip family')
+            address = dns.rdata.Rdata._as_ipv4_address(address)
+            srclen = dns.rdata.Rdata._as_int(srclen, 0, 32)
+            scopelen = dns.rdata.Rdata._as_int(scopelen, 0, 32)
+        else:  # pragma: no cover   (this will never happen)
+            raise ValueError('Bad address family')
 
         self.address = address
         self.srclen = srclen
@@ -258,41 +275,33 @@ class ECSOption(Option):
                              '"{}": srclen must be an integer'.format(srclen))
         return ECSOption(address, srclen, scope)
 
-    def to_wire(self, file):
-        file.write(struct.pack('!H', self.family))
-        file.write(struct.pack('!BB', self.srclen, self.scopelen))
-        file.write(self.addrdata)
+    def to_wire(self, file=None):
+        value = (struct.pack('!HBB', self.family, self.srclen, self.scopelen) +
+                 self.addrdata)
+        if file:
+            file.write(value)
+        else:
+            return value
 
     @classmethod
-    def from_wire(cls, otype, wire, cur, olen):
-        family, src, scope = struct.unpack('!HBB', wire[cur:cur + 4])
-        cur += 4
-
+    def from_wire_parser(cls, otype, parser):
+        family, src, scope = parser.get_struct('!HBB')
         addrlen = int(math.ceil(src / 8.0))
-
+        prefix = parser.get_bytes(addrlen)
         if family == 1:
             pad = 4 - addrlen
-            addr = dns.ipv4.inet_ntoa(wire[cur:cur + addrlen] + b'\x00' * pad)
+            addr = dns.ipv4.inet_ntoa(prefix + b'\x00' * pad)
         elif family == 2:
             pad = 16 - addrlen
-            addr = dns.ipv6.inet_ntoa(wire[cur:cur + addrlen] + b'\x00' * pad)
+            addr = dns.ipv6.inet_ntoa(prefix + b'\x00' * pad)
         else:
             raise ValueError('unsupported family')
 
         return cls(addr, src, scope)
 
-    def _cmp(self, other):
-        if self.addrdata == other.addrdata:
-            return 0
-        if self.addrdata > other.addrdata:
-            return 1
-        return -1
-
-    def __str__(self):
-        return self.to_text()
 
 _type_to_class = {
-        ECS: ECSOption
+    OptionType.ECS: ECSOption
 }
 
 def get_option_class(otype):
@@ -306,6 +315,21 @@ def get_option_class(otype):
     if cls is None:
         cls = GenericOption
     return cls
+
+
+def option_from_wire_parser(otype, parser):
+    """Build an EDNS option object from wire format.
+
+    *otype*, an ``int``, is the option type.
+
+    *parser*, a ``dns.wire.Parser``, the parser, which should be
+    restricted to the option length.
+
+    Returns an instance of a subclass of ``dns.edns.Option``.
+    """
+    cls = get_option_class(otype)
+    otype = OptionType.make(otype)
+    return cls.from_wire_parser(otype, parser)
 
 
 def option_from_wire(otype, wire, current, olen):
@@ -322,6 +346,31 @@ def option_from_wire(otype, wire, current, olen):
 
     Returns an instance of a subclass of ``dns.edns.Option``.
     """
+    parser = dns.wire.Parser(wire, current)
+    with parser.restrict_to(olen):
+        return option_from_wire_parser(otype, parser)
 
-    cls = get_option_class(otype)
-    return cls.from_wire(otype, wire, current, olen)
+def register_type(implementation, otype):
+    """Register the implementation of an option type.
+
+    *implementation*, a ``class``, is a subclass of ``dns.edns.Option``.
+
+    *otype*, an ``int``, is the option type.
+    """
+
+    _type_to_class[otype] = implementation
+
+### BEGIN generated OptionType constants
+
+NSID = OptionType.NSID
+DAU = OptionType.DAU
+DHU = OptionType.DHU
+N3U = OptionType.N3U
+ECS = OptionType.ECS
+EXPIRE = OptionType.EXPIRE
+COOKIE = OptionType.COOKIE
+KEEPALIVE = OptionType.KEEPALIVE
+PADDING = OptionType.PADDING
+CHAIN = OptionType.CHAIN
+
+### END generated OptionType constants

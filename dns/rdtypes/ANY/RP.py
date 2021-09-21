@@ -16,10 +16,12 @@
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 import dns.exception
+import dns.immutable
 import dns.rdata
 import dns.name
 
 
+@dns.immutable.immutable
 class RP(dns.rdata.Rdata):
 
     """RP record"""
@@ -29,9 +31,9 @@ class RP(dns.rdata.Rdata):
     __slots__ = ['mbox', 'txt']
 
     def __init__(self, rdclass, rdtype, mbox, txt):
-        super(RP, self).__init__(rdclass, rdtype)
-        object.__setattr__(self, 'mbox', mbox)
-        object.__setattr__(self, 'txt', txt)
+        super().__init__(rdclass, rdtype)
+        self.mbox = self._as_name(mbox)
+        self.txt = self._as_name(txt)
 
     def to_text(self, origin=None, relativize=True, **kw):
         mbox = self.mbox.choose_relativity(origin, relativize)
@@ -43,30 +45,14 @@ class RP(dns.rdata.Rdata):
                   relativize_to=None):
         mbox = tok.get_name(origin, relativize, relativize_to)
         txt = tok.get_name(origin, relativize, relativize_to)
-        tok.get_eol()
         return cls(rdclass, rdtype, mbox, txt)
 
-    def to_wire(self, file, compress=None, origin=None):
-        self.mbox.to_wire(file, None, origin)
-        self.txt.to_wire(file, None, origin)
-
-    def to_digestable(self, origin=None):
-        return self.mbox.to_digestable(origin) + \
-            self.txt.to_digestable(origin)
+    def _to_wire(self, file, compress=None, origin=None, canonicalize=False):
+        self.mbox.to_wire(file, None, origin, canonicalize)
+        self.txt.to_wire(file, None, origin, canonicalize)
 
     @classmethod
-    def from_wire(cls, rdclass, rdtype, wire, current, rdlen, origin=None):
-        (mbox, cused) = dns.name.from_wire(wire[: current + rdlen],
-                                           current)
-        current += cused
-        rdlen -= cused
-        if rdlen <= 0:
-            raise dns.exception.FormError
-        (txt, cused) = dns.name.from_wire(wire[: current + rdlen],
-                                          current)
-        if cused != rdlen:
-            raise dns.exception.FormError
-        if origin is not None:
-            mbox = mbox.relativize(origin)
-            txt = txt.relativize(origin)
+    def from_wire_parser(cls, rdclass, rdtype, parser, origin=None):
+        mbox = parser.get_name(origin)
+        txt = parser.get_name(origin)
         return cls(rdclass, rdtype, mbox, txt)

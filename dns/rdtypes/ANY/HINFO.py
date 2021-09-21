@@ -18,10 +18,12 @@
 import struct
 
 import dns.exception
+import dns.immutable
 import dns.rdata
 import dns.tokenizer
 
 
+@dns.immutable.immutable
 class HINFO(dns.rdata.Rdata):
 
     """HINFO record"""
@@ -32,14 +34,8 @@ class HINFO(dns.rdata.Rdata):
 
     def __init__(self, rdclass, rdtype, cpu, os):
         super().__init__(rdclass, rdtype)
-        if isinstance(cpu, str):
-            object.__setattr__(self, 'cpu', cpu.encode())
-        else:
-            object.__setattr__(self, 'cpu', cpu)
-        if isinstance(os, str):
-            object.__setattr__(self, 'os', os.encode())
-        else:
-            object.__setattr__(self, 'os', os)
+        self.cpu = self._as_bytes(cpu, True, 255)
+        self.os = self._as_bytes(os, True, 255)
 
     def to_text(self, origin=None, relativize=True, **kw):
         return '"{}" "{}"'.format(dns.rdata._escapify(self.cpu),
@@ -48,12 +44,11 @@ class HINFO(dns.rdata.Rdata):
     @classmethod
     def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
                   relativize_to=None):
-        cpu = tok.get_string()
-        os = tok.get_string()
-        tok.get_eol()
+        cpu = tok.get_string(max_length=255)
+        os = tok.get_string(max_length=255)
         return cls(rdclass, rdtype, cpu, os)
 
-    def to_wire(self, file, compress=None, origin=None):
+    def _to_wire(self, file, compress=None, origin=None, canonicalize=False):
         l = len(self.cpu)
         assert l < 256
         file.write(struct.pack('!B', l))
@@ -64,19 +59,7 @@ class HINFO(dns.rdata.Rdata):
         file.write(self.os)
 
     @classmethod
-    def from_wire(cls, rdclass, rdtype, wire, current, rdlen, origin=None):
-        l = wire[current]
-        current += 1
-        rdlen -= 1
-        if l > rdlen:
-            raise dns.exception.FormError
-        cpu = wire[current:current + l].unwrap()
-        current += l
-        rdlen -= l
-        l = wire[current]
-        current += 1
-        rdlen -= 1
-        if l != rdlen:
-            raise dns.exception.FormError
-        os = wire[current: current + l].unwrap()
+    def from_wire_parser(cls, rdclass, rdtype, parser, origin=None):
+        cpu = parser.get_counted_bytes()
+        os = parser.get_counted_bytes()
         return cls(rdclass, rdtype, cpu, os)

@@ -24,14 +24,14 @@ import dns.rdatatype
 import dns.renderer
 
 
-class Node(object):
+class Node:
 
     """A Node is a set of rdatasets."""
 
     __slots__ = ['rdatasets']
 
     def __init__(self):
-        #: the set of rdatsets, represented as a list.
+        # the set of rdatasets, represented as a list.
         self.rdatasets = []
 
     def to_text(self, name, **kw):
@@ -180,6 +180,10 @@ class Node(object):
 
         if not isinstance(replacement, dns.rdataset.Rdataset):
             raise ValueError('replacement is not an rdataset')
+        if isinstance(replacement, dns.rrset.RRset):
+            # RRsets are not good replacements as the match() method
+            # is not compatible.
+            replacement = replacement.to_rdataset()
         self.delete_rdataset(replacement.rdclass, replacement.rdtype,
                              replacement.covers)
         self.rdatasets.append(replacement)

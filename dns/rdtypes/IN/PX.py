@@ -18,10 +18,13 @@
 import struct
 
 import dns.exception
+import dns.immutable
 import dns.rdata
+import dns.rdtypes.util
 import dns.name
 
 
+@dns.immutable.immutable
 class PX(dns.rdata.Rdata):
 
     """PX record."""
@@ -32,9 +35,9 @@ class PX(dns.rdata.Rdata):
 
     def __init__(self, rdclass, rdtype, preference, map822, mapx400):
         super().__init__(rdclass, rdtype)
-        object.__setattr__(self, 'preference', preference)
-        object.__setattr__(self, 'map822', map822)
-        object.__setattr__(self, 'mapx400', mapx400)
+        self.preference = self._as_uint16(preference)
+        self.map822 = self._as_name(map822)
+        self.mapx400 = self._as_name(mapx400)
 
     def to_text(self, origin=None, relativize=True, **kw):
         map822 = self.map822.choose_relativity(origin, relativize)
@@ -47,32 +50,24 @@ class PX(dns.rdata.Rdata):
         preference = tok.get_uint16()
         map822 = tok.get_name(origin, relativize, relativize_to)
         mapx400 = tok.get_name(origin, relativize, relativize_to)
-        tok.get_eol()
         return cls(rdclass, rdtype, preference, map822, mapx400)
 
-    def to_wire(self, file, compress=None, origin=None):
+    def _to_wire(self, file, compress=None, origin=None, canonicalize=False):
         pref = struct.pack("!H", self.preference)
         file.write(pref)
-        self.map822.to_wire(file, None, origin)
-        self.mapx400.to_wire(file, None, origin)
+        self.map822.to_wire(file, None, origin, canonicalize)
+        self.mapx400.to_wire(file, None, origin, canonicalize)
 
     @classmethod
-    def from_wire(cls, rdclass, rdtype, wire, current, rdlen, origin=None):
-        (preference, ) = struct.unpack('!H', wire[current: current + 2])
-        current += 2
-        rdlen -= 2
-        (map822, cused) = dns.name.from_wire(wire[: current + rdlen],
-                                             current)
-        if cused > rdlen:
-            raise dns.exception.FormError
-        current += cused
-        rdlen -= cused
-        if origin is not None:
-            map822 = map822.relativize(origin)
-        (mapx400, cused) = dns.name.from_wire(wire[: current + rdlen],
-                                              current)
-        if cused != rdlen:
-            raise dns.exception.FormError
-        if origin is not None:
-            mapx400 = mapx400.relativize(origin)
+    def from_wire_parser(cls, rdclass, rdtype, parser, origin=None):
+        preference = parser.get_uint16()
+        map822 = parser.get_name(origin)
+        mapx400 = parser.get_name(origin)
         return cls(rdclass, rdtype, preference, map822, mapx400)
+
+    def _processing_priority(self):
+        return self.preference
+
+    @classmethod
+    def _processing_order(cls, iterable):
+        return dns.rdtypes.util.priority_processing_order(iterable)

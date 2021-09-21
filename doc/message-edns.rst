@@ -30,4 +30,6 @@ will create a ``dns.edns.ECSOption`` object to represent it.
    :members:
    
 .. autofunction:: dns.edns.get_option_class
+.. autofunction:: dns.edns.option_from_wire_parser
 .. autofunction:: dns.edns.option_from_wire
+.. autofunction:: dns.edns.register_type

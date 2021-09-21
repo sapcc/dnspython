@@ -121,7 +121,13 @@ def inet_aton(text, ignore_scope=False):
         elif l > 2:
             raise dns.exception.SyntaxError
 
-    if text == b'::':
+    if text == b'':
+        raise dns.exception.SyntaxError
+    elif text.endswith(b':') and not text.endswith(b'::'):
+        raise dns.exception.SyntaxError
+    elif text.startswith(b':') and not text.startswith(b'::'):
+        raise dns.exception.SyntaxError
+    elif text == b'::':
         text = b'0::'
     #
     # Get rid of the icky dot-quad syntax if we have it.
@@ -157,7 +163,7 @@ def inet_aton(text, ignore_scope=False):
             if seen_empty:
                 raise dns.exception.SyntaxError
             seen_empty = True
-            for i in range(0, 8 - l + 1):
+            for _ in range(0, 8 - l + 1):
                 canonical.append(b'0000')
         else:
             lc = len(c)

@@ -43,8 +43,26 @@ class Rcode(dns.enum.IntEnum):
     NOTAUTH = 9
     #: Name not in zone.
     NOTZONE = 10
+    #: DSO-TYPE Not Implemented
+    DSOTYPENI = 11
     #: Bad EDNS version.
     BADVERS = 16
+    #: TSIG Signature Failure
+    BADSIG = 16
+    #: Key not recognized.
+    BADKEY = 17
+    #: Signature out of time window.
+    BADTIME = 18
+    #: Bad TKEY Mode.
+    BADMODE = 19
+    #: Duplicate key name.
+    BADNAME = 20
+    #: Algorithm not supported.
+    BADALG = 21
+    #: Bad Truncation
+    BADTRUNC = 22
+    #: Bad/missing Server Cookie
+    BADCOOKIE = 23
 
     @classmethod
     def _maximum(cls):
@@ -54,7 +72,6 @@ class Rcode(dns.enum.IntEnum):
     def _unknown_exception_class(cls):
         return UnknownRcode
 
-globals().update(Rcode.__members__)
 
 class UnknownRcode(dns.exception.DNSException):
     """A DNS rcode is unknown."""
@@ -86,8 +103,6 @@ def from_flags(flags, ednsflags):
     """
 
     value = (flags & 0x000f) | ((ednsflags >> 20) & 0xff0)
-    if value < 0 or value > 4095:
-        raise ValueError('rcode must be >= 0 and <= 4095')
     return value
 
 
@@ -108,14 +123,42 @@ def to_flags(value):
     return (v, ev)
 
 
-def to_text(value):
+def to_text(value, tsig=False):
     """Convert rcode into text.
 
-    *value*, and ``int``, the rcode.
+    *value*, an ``int``, the rcode.
 
     Raises ``ValueError`` if rcode is < 0 or > 4095.
 
     Returns a ``str``.
     """
 
+    if tsig and value == Rcode.BADVERS:
+        return 'BADSIG'
     return Rcode.to_text(value)
+
+### BEGIN generated Rcode constants
+
+NOERROR = Rcode.NOERROR
+FORMERR = Rcode.FORMERR
+SERVFAIL = Rcode.SERVFAIL
+NXDOMAIN = Rcode.NXDOMAIN
+NOTIMP = Rcode.NOTIMP
+REFUSED = Rcode.REFUSED
+YXDOMAIN = Rcode.YXDOMAIN
+YXRRSET = Rcode.YXRRSET
+NXRRSET = Rcode.NXRRSET
+NOTAUTH = Rcode.NOTAUTH
+NOTZONE = Rcode.NOTZONE
+DSOTYPENI = Rcode.DSOTYPENI
+BADVERS = Rcode.BADVERS
+BADSIG = Rcode.BADSIG
+BADKEY = Rcode.BADKEY
+BADTIME = Rcode.BADTIME
+BADMODE = Rcode.BADMODE
+BADNAME = Rcode.BADNAME
+BADALG = Rcode.BADALG
+BADTRUNC = Rcode.BADTRUNC
+BADCOOKIE = Rcode.BADCOOKIE
+
+### END generated Rcode constants

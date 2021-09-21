@@ -20,21 +20,24 @@
 #: MAJOR
 MAJOR = 2
 #: MINOR
-MINOR = 0
+MINOR = 2
 #: MICRO
 MICRO = 0
 #: RELEASELEVEL
-RELEASELEVEL = 0x0f
+RELEASELEVEL = 0x00
 #: SERIAL
 SERIAL = 0
 
-if RELEASELEVEL == 0x0f:
+if RELEASELEVEL == 0x0f:  # pragma: no cover
     #: version
     version = '%d.%d.%d' % (MAJOR, MINOR, MICRO)
-elif RELEASELEVEL == 0x00:
-    version = '%d.%d.%dx%d' % \
+elif RELEASELEVEL == 0x00:  # pragma: no cover
+    version = '%d.%d.%ddev%d' % \
               (MAJOR, MINOR, MICRO, SERIAL)
-else:
+elif RELEASELEVEL == 0x0c:  # pragma: no cover
+    version = '%d.%d.%drc%d' % \
+              (MAJOR, MINOR, MICRO, SERIAL)
+else:  # pragma: no cover
     version = '%d.%d.%d%x%d' % \
               (MAJOR, MINOR, MICRO, RELEASELEVEL, SERIAL)
 

@@ -2,12 +2,17 @@
 ignore =
        # Prefer emacs indentation of continued lines
        E126,
+       E127,
        E129,
        # Whitespace round parameter '=' can be excessive
        E252,
+       # Multiple # in a comment is OK
+       E266,
        # Not excited by the "two blank lines" rule
        E302,
        E305,
+       # or the one blank line rule
+       E306,
        # Ambigious variables are ok.
        E741,
        # Lines ending with binary operators are OK

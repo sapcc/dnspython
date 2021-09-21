@@ -19,10 +19,13 @@
 import struct
 
 import dns.exception
+import dns.immutable
 import dns.rdata
+import dns.rdtypes.util
 import dns.name
 
 
+@dns.immutable.immutable
 class URI(dns.rdata.Rdata):
 
     """URI record"""
@@ -33,14 +36,11 @@ class URI(dns.rdata.Rdata):
 
     def __init__(self, rdclass, rdtype, priority, weight, target):
         super().__init__(rdclass, rdtype)
-        object.__setattr__(self, 'priority', priority)
-        object.__setattr__(self, 'weight', weight)
-        if len(target) < 1:
+        self.priority = self._as_uint16(priority)
+        self.weight = self._as_uint16(weight)
+        self.target = self._as_bytes(target, True)
+        if len(self.target) == 0:
             raise dns.exception.SyntaxError("URI target cannot be empty")
-        if isinstance(target, str):
-            object.__setattr__(self, 'target', target.encode())
-        else:
-            object.__setattr__(self, 'target', target)
 
     def to_text(self, origin=None, relativize=True, **kw):
         return '%d %d "%s"' % (self.priority, self.weight,
@@ -54,23 +54,27 @@ class URI(dns.rdata.Rdata):
         target = tok.get().unescape()
         if not (target.is_quoted_string() or target.is_identifier()):
             raise dns.exception.SyntaxError("URI target must be a string")
-        tok.get_eol()
         return cls(rdclass, rdtype, priority, weight, target.value)
 
-    def to_wire(self, file, compress=None, origin=None):
+    def _to_wire(self, file, compress=None, origin=None, canonicalize=False):
         two_ints = struct.pack("!HH", self.priority, self.weight)
         file.write(two_ints)
         file.write(self.target)
 
     @classmethod
-    def from_wire(cls, rdclass, rdtype, wire, current, rdlen, origin=None):
-        if rdlen < 5:
-            raise dns.exception.FormError('URI RR is shorter than 5 octets')
-
-        (priority, weight) = struct.unpack('!HH', wire[current: current + 4])
-        current += 4
-        rdlen -= 4
-        target = wire[current: current + rdlen]
-        current += rdlen
-
+    def from_wire_parser(cls, rdclass, rdtype, parser, origin=None):
+        (priority, weight) = parser.get_struct('!HH')
+        target = parser.get_remaining()
+        if len(target) == 0:
+            raise dns.exception.FormError('URI target may not be empty')
         return cls(rdclass, rdtype, priority, weight, target)
+
+    def _processing_priority(self):
+        return self.priority
+
+    def _processing_weight(self):
+        return self.weight
+
+    @classmethod
+    def _processing_order(cls, iterable):
+        return dns.rdtypes.util.weighted_processing_order(iterable)

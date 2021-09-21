@@ -26,6 +26,7 @@ import dns.rdatatype
 import dns.rdtypes.ANY.TXT
 import dns.ttl
 
+
 class BugsTestCase(unittest.TestCase):
 
     def test_float_LOC(self):
@@ -94,6 +95,7 @@ class BugsTestCase(unittest.TestCase):
         self.assertEqual(t1, t2)
         self.assertEqual(t1, t2)
         self.assertEqual(t1, t4)
+
 
 if __name__ == '__main__':
     unittest.main()

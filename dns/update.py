@@ -27,49 +27,85 @@ import dns.rdataset
 import dns.tsig
 
 
-class Update(dns.message.Message):
+class UpdateSection(dns.enum.IntEnum):
+    """Update sections"""
+    ZONE = 0
+    PREREQ = 1
+    UPDATE = 2
+    ADDITIONAL = 3
 
-    def __init__(self, zone, rdclass=dns.rdataclass.IN, keyring=None,
-                 keyname=None, keyalgorithm=dns.tsig.default_algorithm):
+    @classmethod
+    def _maximum(cls):
+        return 3
+
+
+class UpdateMessage(dns.message.Message):
+
+    _section_enum = UpdateSection
+
+    def __init__(self, zone=None, rdclass=dns.rdataclass.IN, keyring=None,
+                 keyname=None, keyalgorithm=dns.tsig.default_algorithm,
+                 id=None):
         """Initialize a new DNS Update object.
 
         See the documentation of the Message class for a complete
         description of the keyring dictionary.
 
-        *zone*, a ``dns.name.Name`` or ``str``, the zone which is being
-        updated.
+        *zone*, a ``dns.name.Name``, ``str``, or ``None``, the zone
+        which is being updated.  ``None`` should only be used by dnspython's
+        message constructors, as a zone is required for the convenience
+        methods like ``add()``, ``replace()``, etc.
 
         *rdclass*, an ``int`` or ``str``, the class of the zone.
 
-        *keyring*, a ``dict``, the TSIG keyring to use.  If a
-        *keyring* is specified but a *keyname* is not, then the key
-        used will be the first key in the *keyring*.  Note that the
-        order of keys in a dictionary is not defined, so applications
-        should supply a keyname when a keyring is used, unless they
-        know the keyring contains only one key.
-
-        *keyname*, a ``dns.name.Name`` or ``None``, the name of the TSIG key
-        to use; defaults to ``None``. The key must be defined in the keyring.
-
-        *keyalgorithm*, a ``dns.name.Name``, the TSIG algorithm to use.
+        The *keyring*, *keyname*, and *keyalgorithm* parameters are passed to
+        ``use_tsig()``; see its documentation for details.
         """
-        super(Update, self).__init__()
+        super().__init__(id=id)
         self.flags |= dns.opcode.to_flags(dns.opcode.UPDATE)
         if isinstance(zone, str):
             zone = dns.name.from_text(zone)
         self.origin = zone
         rdclass = dns.rdataclass.RdataClass.make(rdclass)
         self.zone_rdclass = rdclass
-        self.find_rrset(self.question, self.origin, rdclass, dns.rdatatype.SOA,
-                        create=True, force_unique=True)
+        if self.origin:
+            self.find_rrset(self.zone, self.origin, rdclass, dns.rdatatype.SOA,
+                            create=True, force_unique=True)
         if keyring is not None:
             self.use_tsig(keyring, keyname, algorithm=keyalgorithm)
+
+    @property
+    def zone(self):
+        """The zone section."""
+        return self.sections[0]
+
+    @zone.setter
+    def zone(self, v):
+        self.sections[0] = v
+
+    @property
+    def prerequisite(self):
+        """The prerequisite section."""
+        return self.sections[1]
+
+    @prerequisite.setter
+    def prerequisite(self, v):
+        self.sections[1] = v
+
+    @property
+    def update(self):
+        """The update section."""
+        return self.sections[2]
+
+    @update.setter
+    def update(self, v):
+        self.sections[2] = v
 
     def _add_rr(self, name, ttl, rd, deleting=None, section=None):
         """Add a single RR to the update section."""
 
         if section is None:
-            section = self.authority
+            section = self.update
         covers = rd.covers()
         rrset = self.find_rrset(section, name, self.zone_rdclass, rd.rdtype,
                                 covers, deleting, True, True)
@@ -129,7 +165,7 @@ class Update(dns.message.Message):
                 - ttl, rdtype, string...
         """
 
-        self._add(False, self.authority, name, *args)
+        self._add(False, self.update, name, *args)
 
     def delete(self, name, *args):
         """Delete records.
@@ -149,7 +185,7 @@ class Update(dns.message.Message):
         if isinstance(name, str):
             name = dns.name.from_text(name, None)
         if len(args) == 0:
-            self.find_rrset(self.authority, name, dns.rdataclass.ANY,
+            self.find_rrset(self.update, name, dns.rdataclass.ANY,
                             dns.rdatatype.ANY, dns.rdatatype.NONE,
                             dns.rdatatype.ANY, True, True)
         elif isinstance(args[0], dns.rdataset.Rdataset):
@@ -164,7 +200,7 @@ class Update(dns.message.Message):
             else:
                 rdtype = dns.rdatatype.RdataType.make(args.pop(0))
                 if len(args) == 0:
-                    self.find_rrset(self.authority, name,
+                    self.find_rrset(self.update, name,
                                     self.zone_rdclass, rdtype,
                                     dns.rdatatype.NONE,
                                     dns.rdataclass.ANY,
@@ -191,7 +227,7 @@ class Update(dns.message.Message):
         a delete of the name followed by one or more calls to add.
         """
 
-        self._add(True, self.authority, name, *args)
+        self._add(True, self.update, name, *args)
 
     def present(self, name, *args):
         """Require that an owner name (and optionally an rdata type,
@@ -211,7 +247,7 @@ class Update(dns.message.Message):
         if isinstance(name, str):
             name = dns.name.from_text(name, None)
         if len(args) == 0:
-            self.find_rrset(self.answer, name,
+            self.find_rrset(self.prerequisite, name,
                             dns.rdataclass.ANY, dns.rdatatype.ANY,
                             dns.rdatatype.NONE, None,
                             True, True)
@@ -222,10 +258,10 @@ class Update(dns.message.Message):
                 # Add a 0 TTL
                 args = list(args)
                 args.insert(0, 0)
-            self._add(False, self.answer, name, *args)
+            self._add(False, self.prerequisite, name, *args)
         else:
             rdtype = dns.rdatatype.RdataType.make(args[0])
-            self.find_rrset(self.answer, name,
+            self.find_rrset(self.prerequisite, name,
                             dns.rdataclass.ANY, rdtype,
                             dns.rdatatype.NONE, None,
                             True, True)
@@ -237,34 +273,47 @@ class Update(dns.message.Message):
         if isinstance(name, str):
             name = dns.name.from_text(name, None)
         if rdtype is None:
-            self.find_rrset(self.answer, name,
+            self.find_rrset(self.prerequisite, name,
                             dns.rdataclass.NONE, dns.rdatatype.ANY,
                             dns.rdatatype.NONE, None,
                             True, True)
         else:
             rdtype = dns.rdatatype.RdataType.make(rdtype)
-            self.find_rrset(self.answer, name,
+            self.find_rrset(self.prerequisite, name,
                             dns.rdataclass.NONE, rdtype,
                             dns.rdatatype.NONE, None,
                             True, True)
 
-    def to_wire(self, origin=None, max_size=65535):
-        """Return a string containing the update in DNS compressed wire
-        format.
+    def _get_one_rr_per_rrset(self, value):
+        # Updates are always one_rr_per_rrset
+        return True
 
-        *origin*, a ``dns.name.Name`` or ``None``, the origin to be
-        appended to any relative names.  If *origin* is ``None``, then
-        the origin of the ``dns.update.Update`` message object is used
-        (i.e. the *zone* parameter passed when the Update object was
-        created).
+    def _parse_rr_header(self, section, name, rdclass, rdtype):
+        deleting = None
+        empty = False
+        if section == UpdateSection.ZONE:
+            if dns.rdataclass.is_metaclass(rdclass) or \
+               rdtype != dns.rdatatype.SOA or \
+               self.zone:
+                raise dns.exception.FormError
+        else:
+            if not self.zone:
+                raise dns.exception.FormError
+            if rdclass in (dns.rdataclass.ANY, dns.rdataclass.NONE):
+                deleting = rdclass
+                rdclass = self.zone[0].rdclass
+                empty = (deleting == dns.rdataclass.ANY or
+                         section == UpdateSection.PREREQ)
+        return (rdclass, rdtype, deleting, empty)
 
-        *max_size*, an ``int``, the maximum size of the wire format
-        output; default is 0, which means "the message's request
-        payload, if nonzero, or 65535".
+# backwards compatibility
+Update = UpdateMessage
 
-        Returns a ``bytes``.
-        """
+### BEGIN generated UpdateSection constants
 
-        if origin is None:
-            origin = self.origin
-        return super(Update, self).to_wire(origin, max_size)
+ZONE = UpdateSection.ZONE
+PREREQ = UpdateSection.PREREQ
+UPDATE = UpdateSection.UPDATE
+ADDITIONAL = UpdateSection.ADDITIONAL
+
+### END generated UpdateSection constants

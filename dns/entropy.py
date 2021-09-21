@@ -21,11 +21,11 @@ import random
 import time
 try:
     import threading as _threading
-except ImportError:
+except ImportError:  # pragma: no cover
     import dummy_threading as _threading    # type: ignore
 
 
-class EntropyPool(object):
+class EntropyPool:
 
     # This is an entropy pool for Python implementations that do not
     # have a working SystemRandom.  I'm not sure there are any, but
@@ -64,7 +64,7 @@ class EntropyPool(object):
         if not self.seeded or self.seed_pid != os.getpid():
             try:
                 seed = os.urandom(16)
-            except Exception:
+            except Exception:  # pragma: no cover
                 try:
                     with open('/dev/urandom', 'rb', 0) as r:
                         seed = r.read(16)
@@ -113,7 +113,7 @@ pool = EntropyPool()
 
 try:
     system_random = random.SystemRandom()
-except Exception:
+except Exception:  # pragma: no cover
     system_random = None
 
 def random_16():

@@ -18,10 +18,13 @@
 import struct
 
 import dns.exception
+import dns.immutable
 import dns.rdata
+import dns.rdtypes.util
 import dns.name
 
 
+@dns.immutable.immutable
 class SRV(dns.rdata.Rdata):
 
     """SRV record"""
@@ -32,10 +35,10 @@ class SRV(dns.rdata.Rdata):
 
     def __init__(self, rdclass, rdtype, priority, weight, port, target):
         super().__init__(rdclass, rdtype)
-        object.__setattr__(self, 'priority', priority)
-        object.__setattr__(self, 'weight', weight)
-        object.__setattr__(self, 'port', port)
-        object.__setattr__(self, 'target', target)
+        self.priority = self._as_uint16(priority)
+        self.weight = self._as_uint16(weight)
+        self.port = self._as_uint16(port)
+        self.target = self._as_name(target)
 
     def to_text(self, origin=None, relativize=True, **kw):
         target = self.target.choose_relativity(origin, relativize)
@@ -49,24 +52,25 @@ class SRV(dns.rdata.Rdata):
         weight = tok.get_uint16()
         port = tok.get_uint16()
         target = tok.get_name(origin, relativize, relativize_to)
-        tok.get_eol()
         return cls(rdclass, rdtype, priority, weight, port, target)
 
-    def to_wire(self, file, compress=None, origin=None):
+    def _to_wire(self, file, compress=None, origin=None, canonicalize=False):
         three_ints = struct.pack("!HHH", self.priority, self.weight, self.port)
         file.write(three_ints)
-        self.target.to_wire(file, compress, origin)
+        self.target.to_wire(file, compress, origin, canonicalize)
 
     @classmethod
-    def from_wire(cls, rdclass, rdtype, wire, current, rdlen, origin=None):
-        (priority, weight, port) = struct.unpack('!HHH',
-                                                 wire[current: current + 6])
-        current += 6
-        rdlen -= 6
-        (target, cused) = dns.name.from_wire(wire[: current + rdlen],
-                                             current)
-        if cused != rdlen:
-            raise dns.exception.FormError
-        if origin is not None:
-            target = target.relativize(origin)
+    def from_wire_parser(cls, rdclass, rdtype, parser, origin=None):
+        (priority, weight, port) = parser.get_struct('!HHH')
+        target = parser.get_name(origin)
         return cls(rdclass, rdtype, priority, weight, port, target)
+
+    def _processing_priority(self):
+        return self.priority
+
+    def _processing_weight(self):
+        return self.weight
+
+    @classmethod
+    def _processing_order(cls, iterable):
+        return dns.rdtypes.util.weighted_processing_order(iterable)
