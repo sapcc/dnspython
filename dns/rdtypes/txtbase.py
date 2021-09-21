@@ -58,15 +58,17 @@ class TXTBase(dns.rdata.Rdata):
                   relativize_to=None):
         strings = []
         max_str_len = 255
-        while 1:
-            token = tok.get().unescape_to_bytes()
+        for token in tok.get_remaining():
+            token = token.unescape_to_bytes()
             if token.is_eol_or_eof():
                 break
-            if not (token.is_quoted_string() or token.is_identifier()):
+            # The 'if' below is always true in the current code, but we
+            # are leaving this check in in case things change some day.
+            if not (token.is_quoted_string() or
+                    token.is_identifier()):  # pragma: no cover
                 raise dns.exception.SyntaxError("expected a string")
-
             if len(token.value) > max_str_len:
-                if isinstance(token.value, binary_type):
+                if isinstance(token.value, bytes):
                     value = token.value
                 else:
                     value = token.value.encode()
@@ -75,11 +77,10 @@ class TXTBase(dns.rdata.Rdata):
                             0, len(value), max_str_len)]
             else:
                 value = token.value
-                if isinstance(value, binary_type):
+                if isinstance(value, bytes):
                     strings.append(value)
                 else:
                     strings.append(value.encode())
-
         if len(strings) == 0:
             raise dns.exception.UnexpectedEnd
         return cls(rdclass, rdtype, strings)
