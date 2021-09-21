@@ -1,9 +1,9 @@
 # dnspython
 
-[![Build Status](https://travis-ci.org/rthalley/dnspython.svg?branch=master)](https://travis-ci.org/rthalley/dnspython)
+[![Build Status](https://github.com/rthalley/dnspython/actions/workflows/python-package.yml/badge.svg)](https://github.com/rthalley/dnspython/actions/)
 [![Documentation Status](https://readthedocs.org/projects/dnspython/badge/?version=latest)](https://dnspython.readthedocs.io/en/latest/?badge=latest)
 [![PyPI version](https://badge.fury.io/py/dnspython.svg)](https://badge.fury.io/py/dnspython)
-[![PyPI Statistics](https://img.shields.io/pypi/dm/dnspython.svg)](https://pypistats.org/packages/dnspython)
+[![License: ISC](https://img.shields.io/badge/License-ISC-brightgreen.svg)](https://opensource.org/licenses/ISC)
 
 ## INTRODUCTION
 
@@ -16,13 +16,22 @@ perform queries for data of a given name, type, and class, and return an answer
 set. The low level classes allow direct manipulation of DNS zones, messages,
 names, and records.
 
-To see a few of the ways dnspython can be used, look in the `examples/` directory.
+To see a few of the ways dnspython can be used, look in the `examples/`
+directory.
 
 dnspython is a utility to work with DNS, `/etc/hosts` is thus not used. For
-simple forward DNS lookups, it's better to use `socket.gethostbyname()`.
+simple forward DNS lookups, it's better to use `socket.getaddrinfo()` or
+`socket.gethostbyname()`.
 
 dnspython originated at Nominum where it was developed
 to facilitate the testing of DNS software.
+
+## ABOUT THIS RELEASE
+
+This is the development version of dnspython 2.2.0.
+Please read
+[What's New](https://dnspython.readthedocs.io/en/stable/whatsnew.html) for
+information about the changes in this release.
 
 ## INSTALLATION
 
@@ -43,17 +52,22 @@ If you want to use internationalized domain names (IDNA)
 functionality, you must run
 `pip install dnspython[idna]`
 
+If you want to use the Trio asynchronous I/O package, you must run
+`pip install dnspython[trio]`.
+
+If you want to use the Curio asynchronous I/O package, you must run
+`pip install dnspython[curio]`.
+
 Note that you can install any combination of the above, e.g.:
 `pip install dnspython[doh,dnssec,idna]`
-
-## ABOUT THIS RELEASE
-
-This is the development version of dnspython 2.0.0
 
 ### Notices
 
 Python 2.x support ended with the release of 1.16.0.  dnspython 2.0.0 and
 later only support Python 3.6 and later.
+
+Documentation has moved to
+[dnspython.readthedocs.io](https://dnspython.readthedocs.io).
 
 The ChangeLog has been discontinued.  Please see the git history for detailed
 change information.

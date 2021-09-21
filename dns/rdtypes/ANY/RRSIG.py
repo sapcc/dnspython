@@ -21,6 +21,7 @@ import struct
 import time
 
 import dns.dnssec
+import dns.immutable
 import dns.exception
 import dns.rdata
 import dns.rdatatype
@@ -50,6 +51,7 @@ def posixtime_to_sigtime(what):
     return time.strftime('%Y%m%d%H%M%S', time.gmtime(what))
 
 
+@dns.immutable.immutable
 class RRSIG(dns.rdata.Rdata):
 
     """RRSIG record"""
@@ -62,15 +64,15 @@ class RRSIG(dns.rdata.Rdata):
                  original_ttl, expiration, inception, key_tag, signer,
                  signature):
         super().__init__(rdclass, rdtype)
-        object.__setattr__(self, 'type_covered', type_covered)
-        object.__setattr__(self, 'algorithm', algorithm)
-        object.__setattr__(self, 'labels', labels)
-        object.__setattr__(self, 'original_ttl', original_ttl)
-        object.__setattr__(self, 'expiration', expiration)
-        object.__setattr__(self, 'inception', inception)
-        object.__setattr__(self, 'key_tag', key_tag)
-        object.__setattr__(self, 'signer', signer)
-        object.__setattr__(self, 'signature', signature)
+        self.type_covered = self._as_rdatatype(type_covered)
+        self.algorithm = dns.dnssec.Algorithm.make(algorithm)
+        self.labels = self._as_uint8(labels)
+        self.original_ttl = self._as_ttl(original_ttl)
+        self.expiration = self._as_uint32(expiration)
+        self.inception = self._as_uint32(inception)
+        self.key_tag = self._as_uint16(key_tag)
+        self.signer = self._as_name(signer)
+        self.signature = self._as_bytes(signature)
 
     def covers(self):
         return self.type_covered
@@ -85,7 +87,7 @@ class RRSIG(dns.rdata.Rdata):
             posixtime_to_sigtime(self.inception),
             self.key_tag,
             self.signer.choose_relativity(origin, relativize),
-            dns.rdata._base64ify(self.signature)
+            dns.rdata._base64ify(self.signature, **kw)
         )
 
     @classmethod
@@ -99,40 +101,24 @@ class RRSIG(dns.rdata.Rdata):
         inception = sigtime_to_posixtime(tok.get_string())
         key_tag = tok.get_int()
         signer = tok.get_name(origin, relativize, relativize_to)
-        chunks = []
-        while 1:
-            t = tok.get().unescape()
-            if t.is_eol_or_eof():
-                break
-            if not t.is_identifier():
-                raise dns.exception.SyntaxError
-            chunks.append(t.value.encode())
-        b64 = b''.join(chunks)
+        b64 = tok.concatenate_remaining_identifiers().encode()
         signature = base64.b64decode(b64)
         return cls(rdclass, rdtype, type_covered, algorithm, labels,
                    original_ttl, expiration, inception, key_tag, signer,
                    signature)
 
-    def to_wire(self, file, compress=None, origin=None):
+    def _to_wire(self, file, compress=None, origin=None, canonicalize=False):
         header = struct.pack('!HBBIIIH', self.type_covered,
                              self.algorithm, self.labels,
                              self.original_ttl, self.expiration,
                              self.inception, self.key_tag)
         file.write(header)
-        self.signer.to_wire(file, None, origin)
+        self.signer.to_wire(file, None, origin, canonicalize)
         file.write(self.signature)
 
     @classmethod
-    def from_wire(cls, rdclass, rdtype, wire, current, rdlen, origin=None):
-        header = struct.unpack('!HBBIIIH', wire[current: current + 18])
-        current += 18
-        rdlen -= 18
-        (signer, cused) = dns.name.from_wire(wire[: current + rdlen], current)
-        current += cused
-        rdlen -= cused
-        if origin is not None:
-            signer = signer.relativize(origin)
-        signature = wire[current: current + rdlen].unwrap()
-        return cls(rdclass, rdtype, header[0], header[1], header[2],
-                   header[3], header[4], header[5], header[6], signer,
-                   signature)
+    def from_wire_parser(cls, rdclass, rdtype, parser, origin=None):
+        header = parser.get_struct('!HBBIIIH')
+        signer = parser.get_name(origin)
+        signature = parser.get_remaining()
+        return cls(rdclass, rdtype, *header, signer, signature)

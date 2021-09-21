@@ -15,7 +15,7 @@
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-"""Tokenize DNS master file format"""
+"""Tokenize DNS zone file format"""
 
 import io
 import sys
@@ -40,20 +40,21 @@ class UngetBufferFull(dns.exception.DNSException):
     """An attempt was made to unget a token when the unget buffer was full."""
 
 
-class Token(object):
-    """A DNS master file format token.
+class Token:
+    """A DNS zone file format token.
 
     ttype: The token type
     value: The token value
     has_escape: Does the token value contain escapes?
     """
 
-    def __init__(self, ttype, value='', has_escape=False):
+    def __init__(self, ttype, value='', has_escape=False, comment=None):
         """Initialize a token instance."""
 
         self.ttype = ttype
         self.value = value
         self.has_escape = has_escape
+        self.comment = comment
 
     def is_eof(self):
         return self.ttype == EOF
@@ -73,7 +74,7 @@ class Token(object):
     def is_comment(self):
         return self.ttype == COMMENT
 
-    def is_delimiter(self):
+    def is_delimiter(self):  # pragma: no cover (we don't return delimiters yet)
         return self.ttype == DELIMITER
 
     def is_eol_or_eof(self):
@@ -104,7 +105,7 @@ class Token(object):
             c = self.value[i]
             i += 1
             if c == '\\':
-                if i >= l:
+                if i >= l:  # pragma: no cover   (can't happen via get())
                     raise dns.exception.UnexpectedEnd
                 c = self.value[i]
                 i += 1
@@ -119,7 +120,10 @@ class Token(object):
                     i += 1
                     if not (c2.isdigit() and c3.isdigit()):
                         raise dns.exception.SyntaxError
-                    c = chr(int(c) * 100 + int(c2) * 10 + int(c3))
+                    codepoint = int(c) * 100 + int(c2) * 10 + int(c3)
+                    if codepoint > 255:
+                        raise dns.exception.SyntaxError
+                    c = chr(codepoint)
             unescaped += c
         return Token(self.ttype, unescaped)
 
@@ -155,7 +159,7 @@ class Token(object):
             c = self.value[i]
             i += 1
             if c == '\\':
-                if i >= l:
+                if i >= l:  # pragma: no cover   (can't happen via get())
                     raise dns.exception.UnexpectedEnd
                 c = self.value[i]
                 i += 1
@@ -170,7 +174,10 @@ class Token(object):
                     i += 1
                     if not (c2.isdigit() and c3.isdigit()):
                         raise dns.exception.SyntaxError
-                    unescaped += b'%c' % (int(c) * 100 + int(c2) * 10 + int(c3))
+                    codepoint = int(c) * 100 + int(c2) * 10 + int(c3)
+                    if codepoint > 255:
+                        raise dns.exception.SyntaxError
+                    unescaped += b'%c' % (codepoint)
                 else:
                     # Note that as mentioned above, if c is a Unicode
                     # code point outside of the ASCII range, then this
@@ -183,8 +190,8 @@ class Token(object):
         return Token(self.ttype, bytes(unescaped))
 
 
-class Tokenizer(object):
-    """A DNS master file format tokenizer.
+class Tokenizer:
+    """A DNS zone file format tokenizer.
 
     A token object is basically a (type, value) tuple.  The valid
     types are EOF, EOL, WHITESPACE, IDENTIFIER, QUOTED_STRING,
@@ -297,7 +304,8 @@ class Tokenizer(object):
         """
 
         if self.ungotten_char is not None:
-            raise UngetBufferFull
+            # this should never happen!
+            raise UngetBufferFull  # pragma: no cover
         self.ungotten_char = c
 
     def skip_whitespace(self):
@@ -395,13 +403,13 @@ class Tokenizer(object):
                             if self.multiline:
                                 raise dns.exception.SyntaxError(
                                     'unbalanced parentheses')
-                            return Token(EOF)
+                            return Token(EOF, comment=token)
                         elif self.multiline:
                             self.skip_whitespace()
                             token = ''
                             continue
                         else:
-                            return Token(EOL, '\n')
+                            return Token(EOL, '\n', comment=token)
                     else:
                         # This code exists in case we ever want a
                         # delimiter to be returned.  It never produces
@@ -421,7 +429,7 @@ class Tokenizer(object):
                 token += c
                 has_escape = True
                 c = self._get_char()
-                if c == '' or c == '\n':
+                if c == '' or (c == '\n' and not self.quoting):
                     raise dns.exception.UnexpectedEnd
             token += c
         if token == '' and ttype != QUOTED_STRING:
@@ -465,9 +473,9 @@ class Tokenizer(object):
     # Helpers
 
     def get_int(self, base=10):
-        """Read the next token and interpret it as an integer.
+        """Read the next token and interpret it as an unsigned integer.
 
-        Raises dns.exception.SyntaxError if not an integer.
+        Raises dns.exception.SyntaxError if not an unsigned integer.
 
         Returns an int.
         """
@@ -513,7 +521,7 @@ class Tokenizer(object):
                     '%d is not an unsigned 16-bit integer' % value)
         return value
 
-    def get_uint32(self):
+    def get_uint32(self, base=10):
         """Read the next token and interpret it as a 32-bit unsigned
         integer.
 
@@ -522,21 +530,33 @@ class Tokenizer(object):
         Returns an int.
         """
 
-        token = self.get().unescape()
-        if not token.is_identifier():
-            raise dns.exception.SyntaxError('expecting an identifier')
-        if not token.value.isdigit():
-            raise dns.exception.SyntaxError('expecting an integer')
-        value = int(token.value)
-        if value < 0 or value > 4294967296:
+        value = self.get_int(base=base)
+        if value < 0 or value > 4294967295:
             raise dns.exception.SyntaxError(
                 '%d is not an unsigned 32-bit integer' % value)
         return value
 
-    def get_string(self, origin=None):
+    def get_uint48(self, base=10):
+        """Read the next token and interpret it as a 48-bit unsigned
+        integer.
+
+        Raises dns.exception.SyntaxError if not a 48-bit unsigned integer.
+
+        Returns an int.
+        """
+
+        value = self.get_int(base=base)
+        if value < 0 or value > 281474976710655:
+            raise dns.exception.SyntaxError(
+                '%d is not an unsigned 48-bit integer' % value)
+        return value
+
+    def get_string(self, max_length=None):
         """Read the next token and interpret it as a string.
 
         Raises dns.exception.SyntaxError if not a string.
+        Raises dns.exception.SyntaxError if token value length
+        exceeds max_length (if specified).
 
         Returns a string.
         """
@@ -544,9 +564,11 @@ class Tokenizer(object):
         token = self.get().unescape()
         if not (token.is_identifier() or token.is_quoted_string()):
             raise dns.exception.SyntaxError('expecting a string')
+        if max_length and len(token.value) > max_length:
+            raise dns.exception.SyntaxError("string too long")
         return token.value
 
-    def get_identifier(self, origin=None):
+    def get_identifier(self):
         """Read the next token, which should be an identifier.
 
         Raises dns.exception.SyntaxError if not an identifier.
@@ -558,6 +580,45 @@ class Tokenizer(object):
         if not token.is_identifier():
             raise dns.exception.SyntaxError('expecting an identifier')
         return token.value
+
+    def get_remaining(self, max_tokens=None):
+        """Return the remaining tokens on the line, until an EOL or EOF is seen.
+
+        max_tokens: If not None, stop after this number of tokens.
+
+        Returns a list of tokens.
+        """
+
+        tokens = []
+        while True:
+            token = self.get()
+            if token.is_eol_or_eof():
+                self.unget(token)
+                break
+            tokens.append(token)
+            if len(tokens) == max_tokens:
+                break
+        return tokens
+
+    def concatenate_remaining_identifiers(self):
+        """Read the remaining tokens on the line, which should be identifiers.
+
+        Raises dns.exception.SyntaxError if a token is seen that is not an
+        identifier.
+
+        Returns a string containing a concatenation of the remaining
+        identifiers.
+        """
+        s = ""
+        while True:
+            token = self.get().unescape()
+            if token.is_eol_or_eof():
+                self.unget(token)
+                break
+            if not token.is_identifier():
+                raise dns.exception.SyntaxError
+            s += token.value
+        return s
 
     def as_name(self, token, origin=None, relativize=False, relativize_to=None):
         """Try to interpret the token as a DNS name.
@@ -582,7 +643,7 @@ class Tokenizer(object):
         token = self.get()
         return self.as_name(token, origin, relativize, relativize_to)
 
-    def get_eol(self):
+    def get_eol_as_token(self):
         """Read the next token and raise an exception if it isn't EOL or
         EOF.
 
@@ -594,7 +655,10 @@ class Tokenizer(object):
             raise dns.exception.SyntaxError(
                 'expected EOL or EOF, got %d "%s"' % (token.ttype,
                                                       token.value))
-        return token.value
+        return token
+
+    def get_eol(self):
+        return self.get_eol_as_token().value
 
     def get_ttl(self):
         """Read the next token and interpret it as a DNS TTL.

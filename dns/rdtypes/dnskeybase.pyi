@@ -27,11 +27,11 @@ class DNSKEYBase(rdata.Rdata):
                   relativize_to=None):
         ...
 
-    def to_wire(self, file, compress=None, origin=None):
+    def _to_wire(self, file, compress=None, origin=None, canonicalize=False):
         ...
 
     @classmethod
-    def from_wire(cls, rdclass, rdtype, wire, current, rdlen, origin=None):
+    def from_parser(cls, rdclass, rdtype, parser, origin=None):
         ...
 
     def flags_to_text_set(self) -> Set[str]:

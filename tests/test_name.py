@@ -17,6 +17,9 @@
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 from typing import Dict # pylint: disable=unused-import
+import copy
+import operator
+import pickle
 import unittest
 
 from io import BytesIO
@@ -146,13 +149,17 @@ class NameTestCase(unittest.TestCase):
         n1 = dns.name.from_text('a')
         n2 = dns.name.from_text('b')
         self.assertLess(n1, n2)
+        self.assertLessEqual(n1, n2)
         self.assertGreater(n2, n1)
+        self.assertGreaterEqual(n2, n1)
 
     def testCompare2(self):
         n1 = dns.name.from_text('')
         n2 = dns.name.from_text('b')
         self.assertLess(n1, n2)
+        self.assertLessEqual(n1, n2)
         self.assertGreater(n2, n1)
+        self.assertGreaterEqual(n2, n1)
 
     def testCompare3(self):
         self.assertLess(dns.name.empty, dns.name.root)
@@ -362,7 +369,6 @@ class NameTestCase(unittest.TestCase):
     def testBadEscape(self):
         def bad():
             n = dns.name.from_text(r'a.b\0q1.c.')
-            print(n)
         self.assertRaises(dns.name.BadEscape, bad)
 
     def testDigestable1(self):
@@ -459,6 +465,30 @@ class NameTestCase(unittest.TestCase):
             compress = {} # type: Dict[dns.name.Name,int]
             n.to_wire(f, compress)
         self.assertRaises(dns.name.NeedAbsoluteNameOrOrigin, bad)
+
+    def testGiantCompressionTable(self):
+        # Only the first 16KiB of a message can have compression pointers.
+        f = BytesIO()
+        compress = {}  # type: Dict[dns.name.Name,int]
+        # exactly 16 bytes encoded
+        n = dns.name.from_text('0000000000.com.')
+        n.to_wire(f, compress)
+        # There are now two entries in the compression table (for the full
+        # name, and for the com. suffix.
+        self.assertEqual(len(compress), 2)
+        for i in range(1023):
+            # exactly 16 bytes encoded with compression
+            n = dns.name.from_text(f'{i:013d}.com')
+            n.to_wire(f, compress)
+        # There are now 1025 entries in the compression table with
+        # the last entry at offset 16368.
+        self.assertEqual(len(compress), 1025)
+        self.assertEqual(compress[n], 16368)
+        # Adding another name should not increase the size of the compression
+        # table, as the pointer would be at offset 16384, which is too big.
+        n = dns.name.from_text('toobig.com.')
+        n.to_wire(f, compress)
+        self.assertEqual(len(compress), 1025)
 
     def testSplit1(self):
         n = dns.name.from_text('foo.bar.')
@@ -753,6 +783,11 @@ class NameTestCase(unittest.TestCase):
                                   idna_codec=dns.name.IDNA_2008_Practical)
         self.assertEqual(str(e), '_sip._tcp.xn--knigsgchen-b4a3dun.')
 
+    def testFromUnicodeEscapes(self):
+        n = dns.name.from_unicode(r'\097.\098.\099.')
+        t = n.to_unicode()
+        self.assertEqual(t, 'a.b.c.')
+
     def testToUnicode1(self):
         n = dns.name.from_text('foo.bar')
         s = n.to_unicode()
@@ -768,13 +803,33 @@ class NameTestCase(unittest.TestCase):
         s = n.to_unicode()
         self.assertEqual(s, 'foo.bar.')
 
+    @unittest.skipUnless(dns.name.have_idna_2008,
+                         'Python idna cannot be imported; no IDNA2008')
     def testToUnicode4(self):
-        if dns.name.have_idna_2008:
-            n = dns.name.from_text('ドメイン.テスト',
-                                   idna_codec=dns.name.IDNA_2008)
-            s = n.to_unicode()
-            self.assertEqual(str(n), 'xn--eckwd4c7c.xn--zckzah.')
-            self.assertEqual(s, 'ドメイン.テスト.')
+        n = dns.name.from_text('ドメイン.テスト',
+                               idna_codec=dns.name.IDNA_2008)
+        s = n.to_unicode()
+        self.assertEqual(str(n), 'xn--eckwd4c7c.xn--zckzah.')
+        self.assertEqual(s, 'ドメイン.テスト.')
+
+    @unittest.skipUnless(dns.name.have_idna_2008,
+                         'Python idna cannot be imported; no IDNA2008')
+    def testToUnicode5(self):
+        # Exercise UTS 46 remapping in decode.  This doesn't normally happen
+        # as you can see from us having to instantiate the codec as
+        # transitional with strict decoding, not one of our usual choices.
+        codec = dns.name.IDNA2008Codec(True, True, False, True)
+        n = dns.name.from_text('xn--gro-7ka.com')
+        self.assertEqual(n.to_unicode(idna_codec=codec),
+                         'gross.com.')
+
+    @unittest.skipUnless(dns.name.have_idna_2008,
+                         'Python idna cannot be imported; no IDNA2008')
+    def testToUnicode6(self):
+        # Test strict 2008 decoding without UTS 46
+        n = dns.name.from_text('xn--gro-7ka.com')
+        self.assertEqual(n.to_unicode(idna_codec=dns.name.IDNA_2008_Strict),
+                         'groß.com.')
 
     def testDefaultDecodeIsJustPunycode(self):
         # groß.com. in IDNA2008 form, pre-encoded.
@@ -802,6 +857,20 @@ class NameTestCase(unittest.TestCase):
         n = dns.name.from_text('xn--gro-7ka.com')
         self.assertEqual(n.to_unicode(True, dns.name.IDNA_2008),
                          'groß.com')
+
+    def testIDNA2003Misc(self):
+        self.assertEqual(dns.name.IDNA_2003.encode(''), b'')
+        self.assertRaises(dns.name.LabelTooLong,
+                          lambda: dns.name.IDNA_2003.encode('x' * 64))
+
+    @unittest.skipUnless(dns.name.have_idna_2008,
+                         'Python idna cannot be imported; no IDNA2008')
+    def testIDNA2008Misc(self):
+        self.assertEqual(dns.name.IDNA_2008.encode(''), b'')
+        self.assertRaises(dns.name.LabelTooLong,
+                          lambda: dns.name.IDNA_2008.encode('x' * 64))
+        self.assertRaises(dns.name.LabelTooLong,
+                          lambda: dns.name.IDNA_2008.encode('groß' + 'x' * 60))
 
     def testReverseIPv4(self):
         e = dns.name.from_text('1.0.0.127.in-addr.arpa.')
@@ -866,6 +935,11 @@ class NameTestCase(unittest.TestCase):
         text = dns.reversename.to_address(n, v6_origin=origin)
         self.assertEqual(text, e)
 
+    def testUnknownReverseOrigin(self):
+        n = dns.name.from_text('1.2.3.4.unknown.')
+        with self.assertRaises(dns.exception.SyntaxError):
+            dns.reversename.to_address(n)
+
     def testE164ToEnum(self):
         text = '+1 650 555 1212'
         e = dns.name.from_text('2.1.2.1.5.5.5.0.5.6.1.e164.arpa.')
@@ -877,6 +951,140 @@ class NameTestCase(unittest.TestCase):
         e = '+16505551212'
         text = dns.e164.to_e164(n)
         self.assertEqual(text, e)
+
+    def testBadEnumToE164(self):
+        n = dns.name.from_text('2.1.2.q.5.5.5.0.5.6.1.e164.arpa.')
+        self.assertRaises(dns.exception.SyntaxError,
+                          lambda: dns.e164.to_e164(n))
+
+    def test_incompatible_relations(self):
+        n1 = dns.name.from_text('example')
+        n2 = 'abc'
+        for oper in [operator.lt, operator.le, operator.ge, operator.gt]:
+            self.assertRaises(TypeError, lambda: oper(n1, n2))
+        self.assertFalse(n1 == n2)
+        self.assertTrue(n1 != n2)
+
+    def testFromUnicodeSimpleEscape(self):
+        n = dns.name.from_unicode(r'a.\b')
+        e = dns.name.from_unicode(r'a.b')
+        self.assertEqual(n, e)
+
+    def testFromUnicodeBadEscape(self):
+        def bad1():
+            n = dns.name.from_unicode(r'a.b\0q1.c.')
+        self.assertRaises(dns.name.BadEscape, bad1)
+        def bad2():
+            n = dns.name.from_unicode(r'a.b\0')
+        self.assertRaises(dns.name.BadEscape, bad2)
+
+    def testFromUnicodeNotString(self):
+        def bad():
+            dns.name.from_unicode(b'123')
+        self.assertRaises(ValueError, bad)
+
+    def testFromUnicodeBadOrigin(self):
+        def bad():
+            dns.name.from_unicode('example', 123)
+        self.assertRaises(ValueError, bad)
+
+    def testFromUnicodeEmptyLabel(self):
+        def bad():
+            dns.name.from_unicode('a..b.example')
+        self.assertRaises(dns.name.EmptyLabel, bad)
+
+    def testFromUnicodeEmptyName(self):
+        self.assertEqual(dns.name.from_unicode('@', None), dns.name.empty)
+
+    def testFromTextNotString(self):
+        def bad():
+            dns.name.from_text(123)
+        self.assertRaises(ValueError, bad)
+
+    def testFromTextBadOrigin(self):
+        def bad():
+            dns.name.from_text('example', 123)
+        self.assertRaises(ValueError, bad)
+
+    def testFromWireNotBytes(self):
+        def bad():
+            dns.name.from_wire(123, 0)
+        self.assertRaises(ValueError, bad)
+
+    def testBadPunycode(self):
+        c = dns.name.IDNACodec()
+        with self.assertRaises(dns.name.IDNAException):
+            c.decode(b'xn--0000h')
+
+    def testRootLabel2003StrictDecode(self):
+        c = dns.name.IDNA_2003_Strict
+        self.assertEqual(c.decode(b''), '')
+
+    @unittest.skipUnless(dns.name.have_idna_2008,
+                         'Python idna cannot be imported; no IDNA2008')
+    def testRootLabel2008StrictDecode(self):
+        c = dns.name.IDNA_2008_Strict
+        self.assertEqual(c.decode(b''), '')
+
+    @unittest.skipUnless(dns.name.have_idna_2008,
+                         'Python idna cannot be imported; no IDNA2008')
+    def testCodecNotFoundRaises(self):
+        dns.name.have_idna_2008 = False
+        with self.assertRaises(dns.name.NoIDNA2008):
+            c = dns.name.IDNA2008Codec()
+            c.encode('Königsgäßchen')
+        with self.assertRaises(dns.name.NoIDNA2008):
+            c = dns.name.IDNA2008Codec(strict_decode=True)
+            c.decode('xn--eckwd4c7c.xn--zckzah.')
+        dns.name.have_idna_2008 = True
+
+    @unittest.skipUnless(dns.name.have_idna_2008,
+                         'Python idna cannot be imported; no IDNA2008')
+    def testBadPunycodeStrict2008(self):
+        c = dns.name.IDNA2008Codec(strict_decode=True)
+        with self.assertRaises(dns.name.IDNAException):
+            c.decode(b'xn--0000h')
+
+    def testRelativizeSubtractionSyntax(self):
+        n = dns.name.from_text('foo.example.')
+        o = dns.name.from_text('example.')
+        e = dns.name.from_text('foo', None)
+        self.assertEqual(n - o, e)
+
+    def testCopy(self):
+        n1 = dns.name.from_text('foo.example.')
+        n2 = copy.copy(n1)
+        self.assertTrue(n1 is not n2)
+        # the Name constructor always copies labels, so there is no
+        # difference between copy and deepcopy
+        self.assertTrue(n1.labels is not n2.labels)
+        self.assertEqual(len(n1.labels), len(n2.labels))
+        for i, l in enumerate(n1.labels):
+            self.assertTrue(l is n2[i])
+
+    def testDeepCopy(self):
+        n1 = dns.name.from_text('foo.example.')
+        n2 = copy.deepcopy(n1)
+        self.assertTrue(n1 is not n2)
+        self.assertTrue(n1.labels is not n2.labels)
+        self.assertEqual(len(n1.labels), len(n2.labels))
+        for i, l in enumerate(n1.labels):
+            self.assertTrue(l is n2[i])
+
+    def testNoAttributeDeletion(self):
+        n = dns.name.from_text('foo.example.')
+        with self.assertRaises(TypeError):
+            del n.labels
+
+    def testUnicodeEscapify(self):
+        n = dns.name.from_unicode('Königsgäßchen;\ttext')
+        self.assertEqual(n.to_unicode(), 'königsgässchen\\;\\009text.')
+
+    def test_pickle(self):
+        n1 = dns.name.from_text('foo.example')
+        p = pickle.dumps(n1)
+        n2 = pickle.loads(p)
+        self.assertEqual(n1, n2)
 
 if __name__ == '__main__':
     unittest.main()

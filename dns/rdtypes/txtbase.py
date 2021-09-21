@@ -20,10 +20,12 @@
 import struct
 
 import dns.exception
+import dns.immutable
 import dns.rdata
 import dns.tokenizer
 
 
+@dns.immutable.immutable
 class TXTBase(dns.rdata.Rdata):
 
     """Base class for rdata that is like a TXT record (see RFC 1035)."""
@@ -40,16 +42,8 @@ class TXTBase(dns.rdata.Rdata):
         *strings*, a tuple of ``bytes``
         """
         super().__init__(rdclass, rdtype)
-        if isinstance(strings, (bytes, str)):
-            strings = (strings,)
-        encoded_strings = []
-        for string in strings:
-            if isinstance(string, str):
-                string = string.encode()
-            else:
-                string = dns.rdata._constify(string)
-            encoded_strings.append(string)
-        object.__setattr__(self, 'strings', tuple(encoded_strings))
+        self.strings = self._as_tuple(strings,
+                                      lambda x: self._as_bytes(x, True, 255))
 
     def to_text(self, origin=None, relativize=True, **kw):
         txt = ''
@@ -90,7 +84,7 @@ class TXTBase(dns.rdata.Rdata):
             raise dns.exception.UnexpectedEnd
         return cls(rdclass, rdtype, strings)
 
-    def to_wire(self, file, compress=None, origin=None):
+    def _to_wire(self, file, compress=None, origin=None, canonicalize=False):
         for s in self.strings:
             l = len(s)
             assert l < 256
@@ -98,16 +92,9 @@ class TXTBase(dns.rdata.Rdata):
             file.write(s)
 
     @classmethod
-    def from_wire(cls, rdclass, rdtype, wire, current, rdlen, origin=None):
+    def from_wire_parser(cls, rdclass, rdtype, parser, origin=None):
         strings = []
-        while rdlen > 0:
-            l = wire[current]
-            current += 1
-            rdlen -= 1
-            if l > rdlen:
-                raise dns.exception.FormError
-            s = wire[current: current + l].unwrap()
-            current += l
-            rdlen -= l
+        while parser.remaining() > 0:
+            s = parser.get_counted_bytes()
             strings.append(s)
         return cls(rdclass, rdtype, strings)

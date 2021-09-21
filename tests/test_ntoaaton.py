@@ -17,6 +17,7 @@
 
 import unittest
 import binascii
+import socket
 
 import dns.exception
 import dns.ipv4
@@ -162,6 +163,12 @@ class NtoAAtoNTestCase(unittest.TestCase):
         t = ntoa6(b)
         self.assertEqual(t, '::0.1.255.255')
 
+    def test_ntoa15(self):
+        # This exercises the current_len > best_len branch in the <= case.
+        b = binascii.unhexlify(b'0000ffff00000000ffff00000000ffff')
+        t = ntoa6(b)
+        self.assertEqual(t, '0:ffff::ffff:0:0:ffff')
+
     def test_bad_ntoa1(self):
         def bad():
             ntoa6(b'')
@@ -195,7 +202,6 @@ class NtoAAtoNTestCase(unittest.TestCase):
                 return aton4(a)
             return bad
         for addr in v4_bad_addrs:
-            print(addr)
             self.assertRaises(dns.exception.SyntaxError, make_bad(addr))
 
     def test_bad_v6_aton(self):
@@ -261,8 +267,8 @@ class NtoAAtoNTestCase(unittest.TestCase):
         self.assertRaises(dns.exception.SyntaxError, bad)
 
     def test_ptontop(self):
-        for (af, a) in [(dns.inet.AF_INET, '1.2.3.4'),
-                        (dns.inet.AF_INET6, '2001:db8:0:1:1:1:1:1')]:
+        for (af, a) in [(socket.AF_INET, '1.2.3.4'),
+                        (socket.AF_INET6, '2001:db8:0:1:1:1:1:1')]:
             self.assertEqual(dns.inet.inet_ntop(af, dns.inet.inet_pton(af, a)),
                              a)
 
@@ -274,6 +280,47 @@ class NtoAAtoNTestCase(unittest.TestCase):
                        ('1.2.3.4a', False),
                        ('2001:db8:0:1:1:1:1:q1', False)]:
             self.assertEqual(dns.inet.is_address(t), e)
+
+    def test_low_level_address_tuple(self):
+        t = dns.inet.low_level_address_tuple(('1.2.3.4', 53))
+        self.assertEqual(t, ('1.2.3.4', 53))
+        t = dns.inet.low_level_address_tuple(('2600::1', 53))
+        self.assertEqual(t, ('2600::1', 53, 0, 0))
+        t = dns.inet.low_level_address_tuple(('1.2.3.4', 53), socket.AF_INET)
+        self.assertEqual(t, ('1.2.3.4', 53))
+        t = dns.inet.low_level_address_tuple(('2600::1', 53), socket.AF_INET6)
+        self.assertEqual(t, ('2600::1', 53, 0, 0))
+        t = dns.inet.low_level_address_tuple(('fd80::1%2', 53), socket.AF_INET6)
+        self.assertEqual(t, ('fd80::1', 53, 0, 2))
+        try:
+            # This can fail on windows for python < 3.8, so we tolerate
+            # the failure and only test if we have something we can work
+            # with.
+            info = socket.if_nameindex()
+        except Exception:
+            info = []
+        if info:
+            # find first thing on list that is not zero (should be first thing!
+            pair = None
+            for p in info:
+                if p[0] != 0:
+                    pair = p
+                    break
+            if pair:
+                address = 'fd80::1%' + pair[1]
+                t = dns.inet.low_level_address_tuple((address, 53),
+                                                     socket.AF_INET6)
+                self.assertEqual(t, ('fd80::1', 53, 0, pair[0]))
+        def bad():
+            bogus = socket.AF_INET + socket.AF_INET6 + 1
+            t = dns.inet.low_level_address_tuple(('2600::1', 53), bogus)
+        self.assertRaises(NotImplementedError, bad)
+
+    def test_bogus_family(self):
+        self.assertRaises(NotImplementedError,
+                          lambda: dns.inet.inet_pton(12345, 'bogus'))
+        self.assertRaises(NotImplementedError,
+                          lambda: dns.inet.inet_ntop(12345, b'bogus'))
 
 if __name__ == '__main__':
     unittest.main()

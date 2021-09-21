@@ -25,11 +25,12 @@ import encodings.idna    # type: ignore
 try:
     import idna          # type: ignore
     have_idna_2008 = True
-except ImportError:
+except ImportError:  # pragma: no cover
     have_idna_2008 = False
 
+import dns.wire
 import dns.exception
-import dns.wiredata
+import dns.immutable
 
 # fullcompare() result values
 
@@ -95,7 +96,7 @@ class IDNAException(dns.exception.DNSException):
     fmt = "IDNA processing exception: {idna_exception}"
 
 
-class IDNACodec(object):
+class IDNACodec:
     """Abstract base class for IDNA encoder/decoders."""
 
     def __init__(self):
@@ -105,7 +106,7 @@ class IDNACodec(object):
         return label.lower().startswith(b'xn--')
 
     def encode(self, label):
-        raise NotImplementedError
+        raise NotImplementedError  # pragma: no cover
 
     def decode(self, label):
         # We do not apply any IDNA policy on decode.
@@ -128,7 +129,7 @@ class IDNA2003Codec(IDNACodec):
         was encoded with IDNA2008.  The default is `False`.
         """
 
-        super(IDNA2003Codec, self).__init__()
+        super().__init__()
         self.strict_decode = strict_decode
 
     def encode(self, label):
@@ -144,7 +145,7 @@ class IDNA2003Codec(IDNACodec):
     def decode(self, label):
         """Decode *label*."""
         if not self.strict_decode:
-            return super(IDNA2003Codec, self).decode(label)
+            return super().decode(label)
         if label == b'':
             return ''
         try:
@@ -181,7 +182,7 @@ class IDNA2008Codec(IDNACodec):
         is done when decoding.  This can cause failures if the name
         was encoded with IDNA2003.  The default is False.
         """
-        super(IDNA2008Codec, self).__init__()
+        super().__init__()
         self.uts_46 = uts_46
         self.transitional = transitional
         self.allow_pure_ascii = allow_pure_ascii
@@ -191,7 +192,10 @@ class IDNA2008Codec(IDNACodec):
         if label == '':
             return b''
         if self.allow_pure_ascii and is_all_ascii(label):
-            return label.encode('ascii')
+            encoded = label.encode('ascii')
+            if len(encoded) > 63:
+                raise LabelTooLong
+            return encoded
         if not have_idna_2008:
             raise NoIDNA2008
         try:
@@ -199,20 +203,24 @@ class IDNA2008Codec(IDNACodec):
                 label = idna.uts46_remap(label, False, self.transitional)
             return idna.alabel(label)
         except idna.IDNAError as e:
-            raise IDNAException(idna_exception=e)
+            if e.args[0] == 'Label too long':
+                raise LabelTooLong
+            else:
+                raise IDNAException(idna_exception=e)
 
     def decode(self, label):
         if not self.strict_decode:
-            return super(IDNA2008Codec, self).decode(label)
+            return super().decode(label)
         if label == b'':
             return ''
         if not have_idna_2008:
             raise NoIDNA2008
         try:
+            ulabel = idna.ulabel(label)
             if self.uts_46:
-                label = idna.uts46_remap(label, False, False)
-            return _escapify(idna.ulabel(label))
-        except idna.IDNAError as e:
+                ulabel = idna.uts46_remap(ulabel, False, self.transitional)
+            return _escapify(ulabel)
+        except (idna.IDNAError, UnicodeError) as e:
             raise IDNAException(idna_exception=e)
 
 _escaped = b'"().;\\@$'
@@ -235,8 +243,6 @@ def _escapify(label):
         # Ordinary DNS label mode.  Escape special characters and values
         # < 0x20 or > 0x7f.
         text = ''
-        if isinstance(label, str):
-            label = label.encode()
         for c in label:
             if c in _escaped:
                 text += '\\' + chr(c)
@@ -297,10 +303,11 @@ def _maybe_convert_to_binary(label):
         return label
     if isinstance(label, str):
         return label.encode()
-    raise ValueError
+    raise ValueError  # pragma: no cover
 
 
-class Name(object):
+@dns.immutable.immutable
+class Name:
 
     """A DNS name.
 
@@ -316,16 +323,8 @@ class Name(object):
         """
 
         labels = [_maybe_convert_to_binary(x) for x in labels]
-        super(Name, self).__setattr__('labels', tuple(labels))
+        self.labels = tuple(labels)
         _validate_labels(self.labels)
-
-    def __setattr__(self, name, value):
-        # Names are immutable
-        raise TypeError("object doesn't support attribute assignment")
-
-    def __delattr__(self, name):
-        # Names are immutable
-        raise TypeError("object doesn't support attribute deletion")
 
     def __copy__(self):
         return Name(self.labels)
@@ -338,7 +337,7 @@ class Name(object):
         return {'labels': self.labels}
 
     def __setstate__(self, state):
-        super(Name, self).__setattr__('labels', state['labels'])
+        super().__setattr__('labels', state['labels'])
         _validate_labels(self.labels)
 
     def is_absolute(self):
@@ -454,7 +453,7 @@ class Name(object):
         Returns a ``bool``.
         """
 
-        (nr, o, nl) = self.fullcompare(other)
+        (nr, _, _) = self.fullcompare(other)
         if nr == NAMERELN_SUBDOMAIN or nr == NAMERELN_EQUAL:
             return True
         return False
@@ -468,7 +467,7 @@ class Name(object):
         Returns a ``bool``.
         """
 
-        (nr, o, nl) = self.fullcompare(other)
+        (nr, _, _) = self.fullcompare(other)
         if nr == NAMERELN_SUPERDOMAIN or nr == NAMERELN_EQUAL:
             return True
         return False
@@ -590,19 +589,10 @@ class Name(object):
         Returns a ``bytes``.
         """
 
-        out = bytearray()
-        for label in self.labels:
-            out.append(len(label))
-            out += label.lower()
-        if not self.is_absolute():
-            if origin is None or not origin.is_absolute():
-                raise NeedAbsoluteNameOrOrigin
-            for label in origin.labels:
-                out.append(len(label))
-                out += label.lower()
-        return bytes(out)
+        return self.to_wire(origin=origin, canonicalize=True)
 
-    def to_wire(self, file=None, compress=None, origin=None):
+    def to_wire(self, file=None, compress=None, origin=None,
+                canonicalize=False):
         """Convert name to wire format, possibly compressing it.
 
         *file* is the file where the name is emitted (typically an
@@ -619,6 +609,10 @@ class Name(object):
         relative and origin is not ``None``, then *origin* will be appended
         to it.
 
+        *canonicalize*, a ``bool``, indicates whether the name should
+        be canonicalized; that is, converted to a format suitable for
+        digesting in hashes.
+
         Raises ``dns.name.NeedAbsoluteNameOrOrigin`` if the name is
         relative and no origin was provided.
 
@@ -629,13 +623,19 @@ class Name(object):
             out = bytearray()
             for label in self.labels:
                 out.append(len(label))
-                out += label
+                if canonicalize:
+                    out += label.lower()
+                else:
+                    out += label
             if not self.is_absolute():
                 if origin is None or not origin.is_absolute():
                     raise NeedAbsoluteNameOrOrigin
                 for label in origin.labels:
                     out.append(len(label))
-                    out += label
+                    if canonicalize:
+                        out += label.lower()
+                    else:
+                        out += label
             return bytes(out)
 
         if not self.is_absolute():
@@ -666,7 +666,10 @@ class Name(object):
                 l = len(label)
                 file.write(struct.pack('!B', l))
                 if l > 0:
-                    file.write(label)
+                    if canonicalize:
+                        file.write(label.lower())
+                    else:
+                        file.write(label)
 
     def __len__(self):
         """The length of the name (in labels).
@@ -956,6 +959,39 @@ def from_text(text, origin=root, idna_codec=None):
     return Name(labels)
 
 
+def from_wire_parser(parser):
+    """Convert possibly compressed wire format into a Name.
+
+    *parser* is a dns.wire.Parser.
+
+    Raises ``dns.name.BadPointer`` if a compression pointer did not
+    point backwards in the message.
+
+    Raises ``dns.name.BadLabelType`` if an invalid label type was encountered.
+
+    Returns a ``dns.name.Name``
+    """
+
+    labels = []
+    biggest_pointer = parser.current
+    with parser.restore_furthest():
+        count = parser.get_uint8()
+        while count != 0:
+            if count < 64:
+                labels.append(parser.get_bytes(count))
+            elif count >= 192:
+                current = (count & 0x3f) * 256 + parser.get_uint8()
+                if current >= biggest_pointer:
+                    raise BadPointer
+                biggest_pointer = current
+                parser.seek(current)
+            else:
+                raise BadLabelType
+            count = parser.get_uint8()
+        labels.append(b'')
+    return Name(labels)
+
+
 def from_wire(message, current):
     """Convert possibly compressed wire format into a Name.
 
@@ -977,32 +1013,6 @@ def from_wire(message, current):
 
     if not isinstance(message, bytes):
         raise ValueError("input to from_wire() must be a byte string")
-    message = dns.wiredata.maybe_wrap(message)
-    labels = []
-    biggest_pointer = current
-    hops = 0
-    count = message[current]
-    current += 1
-    cused = 1
-    while count != 0:
-        if count < 64:
-            labels.append(message[current: current + count].unwrap())
-            current += count
-            if hops == 0:
-                cused += count
-        elif count >= 192:
-            current = (count & 0x3f) * 256 + message[current]
-            if hops == 0:
-                cused += 1
-            if current >= biggest_pointer:
-                raise BadPointer
-            biggest_pointer = current
-            hops += 1
-        else:
-            raise BadLabelType
-        count = message[current]
-        current += 1
-        if hops == 0:
-            cused += 1
-    labels.append('')
-    return (Name(labels), cused)
+    parser = dns.wire.Parser(message, current)
+    name = from_wire_parser(parser)
+    return (name, parser.current - current)

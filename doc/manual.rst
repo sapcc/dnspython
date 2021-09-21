@@ -12,6 +12,7 @@ Dnspython Manual
    resolver
    zone
    dnssec
-   trio
+   async
    exceptions
    utilities
+   typing

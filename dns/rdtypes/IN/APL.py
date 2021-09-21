@@ -20,22 +20,31 @@ import codecs
 import struct
 
 import dns.exception
+import dns.immutable
 import dns.ipv4
 import dns.ipv6
 import dns.rdata
 import dns.tokenizer
 
-class APLItem(object):
+@dns.immutable.immutable
+class APLItem:
 
     """An APL list item."""
 
     __slots__ = ['family', 'negation', 'address', 'prefix']
 
     def __init__(self, family, negation, address, prefix):
-        self.family = family
-        self.negation = negation
-        self.address = address
-        self.prefix = prefix
+        self.family = dns.rdata.Rdata._as_uint16(family)
+        self.negation = dns.rdata.Rdata._as_bool(negation)
+        if self.family == 1:
+            self.address = dns.rdata.Rdata._as_ipv4_address(address)
+            self.prefix = dns.rdata.Rdata._as_int(prefix, 0, 32)
+        elif self.family == 2:
+            self.address = dns.rdata.Rdata._as_ipv6_address(address)
+            self.prefix = dns.rdata.Rdata._as_int(prefix, 0, 128)
+        else:
+            self.address = dns.rdata.Rdata._as_bytes(address, max_length=127)
+            self.prefix = dns.rdata.Rdata._as_uint8(prefix)
 
     def __str__(self):
         if self.negation:
@@ -68,6 +77,7 @@ class APLItem(object):
         file.write(address)
 
 
+@dns.immutable.immutable
 class APL(dns.rdata.Rdata):
 
     """APL record."""
@@ -78,7 +88,10 @@ class APL(dns.rdata.Rdata):
 
     def __init__(self, rdclass, rdtype, items):
         super().__init__(rdclass, rdtype)
-        object.__setattr__(self, 'items', dns.rdata._constify(items))
+        for item in items:
+            if not isinstance(item, APLItem):
+                raise ValueError('item not an APLItem')
+        self.items = tuple(items)
 
     def to_text(self, origin=None, relativize=True, **kw):
         return ' '.join(map(str, self.items))
@@ -87,11 +100,8 @@ class APL(dns.rdata.Rdata):
     def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
                   relativize_to=None):
         items = []
-        while True:
-            token = tok.get().unescape()
-            if token.is_eol_or_eof():
-                break
-            item = token.value
+        for token in tok.get_remaining():
+            item = token.unescape().value
             if item[0] == '!':
                 negation = True
                 item = item[1:]
@@ -106,48 +116,36 @@ class APL(dns.rdata.Rdata):
 
         return cls(rdclass, rdtype, items)
 
-    def to_wire(self, file, compress=None, origin=None):
+    def _to_wire(self, file, compress=None, origin=None, canonicalize=False):
         for item in self.items:
             item.to_wire(file)
 
     @classmethod
-    def from_wire(cls, rdclass, rdtype, wire, current, rdlen, origin=None):
+    def from_wire_parser(cls, rdclass, rdtype, parser, origin=None):
 
         items = []
-        while 1:
-            if rdlen == 0:
-                break
-            if rdlen < 4:
-                raise dns.exception.FormError
-            header = struct.unpack('!HBB', wire[current: current + 4])
+        while parser.remaining() > 0:
+            header = parser.get_struct('!HBB')
             afdlen = header[2]
             if afdlen > 127:
                 negation = True
                 afdlen -= 128
             else:
                 negation = False
-            current += 4
-            rdlen -= 4
-            if rdlen < afdlen:
-                raise dns.exception.FormError
-            address = wire[current: current + afdlen].unwrap()
+            address = parser.get_bytes(afdlen)
             l = len(address)
             if header[0] == 1:
                 if l < 4:
                     address += b'\x00' * (4 - l)
-                address = dns.ipv4.inet_ntoa(address)
             elif header[0] == 2:
                 if l < 16:
                     address += b'\x00' * (16 - l)
-                address = dns.ipv6.inet_ntoa(address)
             else:
                 #
                 # This isn't really right according to the RFC, but it
                 # seems better than throwing an exception
                 #
                 address = codecs.encode(address, 'hex_codec')
-            current += afdlen
-            rdlen -= afdlen
             item = APLItem(header[0], negation, address, header[1])
             items.append(item)
         return cls(rdclass, rdtype, items)

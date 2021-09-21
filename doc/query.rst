@@ -41,4 +41,11 @@ HTTPS
 Zone Transfers
 --------------
 
+As of dnspython 2.1, :py:func:`dns.query.xfr` is deprecated.  Please use
+:py:func:`dns.query.inbound_xfr` instead.
+
+.. autoclass:: dns.query.UDPMode
+
+.. autofunction:: dns.query.inbound_xfr
+
 .. autofunction:: dns.query.xfr

@@ -18,10 +18,12 @@
 import struct
 
 import dns.exception
+import dns.immutable
 import dns.rdata
 import dns.tokenizer
 
 
+@dns.immutable.immutable
 class CAA(dns.rdata.Rdata):
 
     """CAA (Certification Authority Authorization) record"""
@@ -32,9 +34,11 @@ class CAA(dns.rdata.Rdata):
 
     def __init__(self, rdclass, rdtype, flags, tag, value):
         super().__init__(rdclass, rdtype)
-        object.__setattr__(self, 'flags', flags)
-        object.__setattr__(self, 'tag', tag)
-        object.__setattr__(self, 'value', value)
+        self.flags = self._as_uint8(flags)
+        self.tag = self._as_bytes(tag, True, 255)
+        if not tag.isalnum():
+            raise ValueError("tag is not alphanumeric")
+        self.value = self._as_bytes(value)
 
     def to_text(self, origin=None, relativize=True, **kw):
         return '%u %s "%s"' % (self.flags,
@@ -46,14 +50,10 @@ class CAA(dns.rdata.Rdata):
                   relativize_to=None):
         flags = tok.get_uint8()
         tag = tok.get_string().encode()
-        if len(tag) > 255:
-            raise dns.exception.SyntaxError("tag too long")
-        if not tag.isalnum():
-            raise dns.exception.SyntaxError("tag is not alphanumeric")
         value = tok.get_string().encode()
         return cls(rdclass, rdtype, flags, tag, value)
 
-    def to_wire(self, file, compress=None, origin=None):
+    def _to_wire(self, file, compress=None, origin=None, canonicalize=False):
         file.write(struct.pack('!B', self.flags))
         l = len(self.tag)
         assert l < 256
@@ -62,9 +62,8 @@ class CAA(dns.rdata.Rdata):
         file.write(self.value)
 
     @classmethod
-    def from_wire(cls, rdclass, rdtype, wire, current, rdlen, origin=None):
-        (flags, l) = struct.unpack('!BB', wire[current: current + 2])
-        current += 2
-        tag = wire[current: current + l]
-        value = wire[current + l:current + rdlen - 2]
+    def from_wire_parser(cls, rdclass, rdtype, parser, origin=None):
+        flags = parser.get_uint8()
+        tag = parser.get_counted_bytes()
+        value = parser.get_remaining()
         return cls(rdclass, rdtype, flags, tag, value)
