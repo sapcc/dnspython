@@ -635,11 +635,6 @@ class RdataTestCase(unittest.TestCase):
         with self.assertRaises(dns.exception.SyntaxError):
             dns.rdata.from_text('in', 'txt', '')
 
-    def test_too_long_TXT(self):
-        # hit too long
-        with self.assertRaises(dns.exception.SyntaxError):
-            dns.rdata.from_text('in', 'txt', 'a' * 256)
-
     def equal_smimea(self, a, b):
         a = dns.rdata.from_text(dns.rdataclass.IN, dns.rdatatype.SMIMEA, a)
         b = dns.rdata.from_text(dns.rdataclass.IN, dns.rdatatype.SMIMEA, b)
