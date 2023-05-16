@@ -635,10 +635,10 @@ class RdataTestCase(unittest.TestCase):
         with self.assertRaises(dns.exception.SyntaxError):
             dns.rdata.from_text('in', 'txt', '')
 
-    def test_too_long_TXT(self):
-        # hit too long
-        with self.assertRaises(dns.exception.SyntaxError):
-            dns.rdata.from_text('in', 'txt', 'a' * 256)
+    def test_long_TXT(self):
+        # long TXT is split at 255 length and does not raise
+        rdata = dns.rdata.from_text('in', 'txt', 'a' * 256)
+        self.assertEqual(rdata.strings, (b'a' * 255, b'a'))
 
     def equal_smimea(self, a, b):
         a = dns.rdata.from_text(dns.rdataclass.IN, dns.rdatatype.SMIMEA, a)
@@ -696,7 +696,7 @@ class RdataTestCase(unittest.TestCase):
                     rr = dns.rdata.from_text('IN', 'DNSKEY', input_variation)
                     new_text = rr.to_text(chunksize=chunksize)
                     self.assertEqual(output, new_text)
-                    
+
     def test_relative_vs_absolute_compare_unstrict(self):
         try:
             saved = dns.rdata._allow_relative_comparisons
