@@ -57,6 +57,7 @@ class TXTBase(dns.rdata.Rdata):
     def from_text(cls, rdclass, rdtype, tok, origin=None, relativize=True,
                   relativize_to=None):
         strings = []
+        max_str_len = 255
         for token in tok.get_remaining():
             token = token.unescape_to_bytes()
             # The 'if' below is always true in the current code, but we
@@ -64,9 +65,13 @@ class TXTBase(dns.rdata.Rdata):
             if not (token.is_quoted_string() or
                     token.is_identifier()):  # pragma: no cover
                 raise dns.exception.SyntaxError("expected a string")
-            if len(token.value) > 255:
-                raise dns.exception.SyntaxError("string too long")
-            strings.append(token.value)
+            if len(token.value) > max_str_len:
+                value = token.value
+                # Cut into smaller strings:
+                strings += [value[i:i+max_str_len] for i in range(
+                            0, len(value), max_str_len)]
+            else:
+                strings.append(token.value)
         if len(strings) == 0:
             raise dns.exception.UnexpectedEnd
         return cls(rdclass, rdtype, strings)
