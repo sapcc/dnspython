@@ -92,8 +92,8 @@ class TXTBase(dns.rdata.Rdata):
                 raise dns.exception.SyntaxError("expected a string")
             if len(token.value) > 255:
                 # Cut into smaller strings:
-                strings += [value[i:i+max_str_len] for i in range(
-                            0, len(value), max_str_len)]
+                strings += [token.value[i:i+max_str_len] for i in range(
+                            0, len(token.value), max_str_len)]
             else:
                 strings.append(token.value)
         if len(strings) == 0:
